@@ -2,7 +2,6 @@ from pathlib import Path
 import onnx
 from onnx import numpy_helper
 import numpy as np
-import onnxruntime
 
 
 def _make_value_info(name):
@@ -19,6 +18,12 @@ def _extract_value_info(arr, name):
     )
 
 
+def _eval_with_onnxruntime(model, inputs, output_names):
+    import onnxruntime
+
+    session = onnxruntime.InferenceSession(model.SerializeToString())
+    return session.run(output_names, inputs)
+
 
 class NamedArray:
     def __init__(self, name, array):
@@ -32,10 +37,12 @@ class Builder:
         opset_version=None,
         eval_each_node=False,
         value_prefix="onnx_builder_tmp",
+        eval_func=_eval_with_onnxruntime,
     ):
         self.opset_version = opset_version
         self.eval_each_node = eval_each_node
         self.value_prefix = value_prefix
+        self.__eval_func = eval_func
         self.__value_idx = 0
         self.__nodes = []
         self.__input_vis = []
@@ -92,12 +99,11 @@ class Builder:
         return model
 
     def eval(self):
-        model = self.build ()
+        model = self.build()
         input_names = [vi.name for vi in self.__input_vis]
-        session = onnxruntime.InferenceSession(model.SerializeToString())
         inputs = dict(zip(input_names, self.__inputs))
         output_names = [vi.name for vi in self.__output_vis]
-        outputs = session.run(output_names, inputs)
+        outputs = self.__eval_func(model, inputs, output_names)
         for name, array in zip(output_names, outputs):
             for holder in self.__outputs:
                 if holder.name == name:
@@ -179,16 +185,13 @@ class Builder:
                 outputs=output_vis,
                 initializer=self.__initializers,
             )
-
             opset_imports = None
             if self.opset_version is not None:
                 opset_imports = [onnx.helper.make_operatorsetid("", self.opset_version)]
             model = onnx.helper.make_model(graph, opset_imports=opset_imports)
-            serialized = model.SerializeToString()
 
-            session = onnxruntime.InferenceSession(serialized)
             inputs = dict(zip(input_names, inputs))
-            outputs = session.run(output_names, inputs)
+            outputs = self.__eval_func(model, inputs, output_names)
             for i, output_ in enumerate(outputs):
                 outputs[i] = NamedArray(output_names[i], output_)
             if outs == 1:
