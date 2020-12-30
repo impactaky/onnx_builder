@@ -44,7 +44,7 @@ class ImplTensorToStr:
 
 
 def from_onnx(model, output_dir, inputs=None):
-    if isinstance(model, str):
+    if not isinstance(model, onnx.ModelProto):
         model = onnx.load(model)
     output_dir = Path(output_dir)
     storage_dir = Path(output_dir) / "storage"
@@ -84,12 +84,12 @@ builder = onnx_builder.Builder(value_prefix='tmp')
                 )
             )
     else:
-        for input_ in inputs:
+        for name, array in inputs.items():
             python_file.write(
                 "{} = builder.Input({}, name='{}')\n".format(
-                    to_python_name(input_[0]),
-                    ndarray_to_str(input_[1], input_[0]),
-                    input_[0],
+                    to_python_name(name),
+                    ndarray_to_str(array, name),
+                    name,
                 )
             )
     python_file.write("\n")
@@ -148,3 +148,9 @@ builder = onnx_builder.Builder(value_prefix='tmp')
     python_file.write("\n")
 
     python_file.write("builder.export(cwd/'exported')\n")
+
+
+def from_test_case(test_case_dir, output_dir):
+    test_case_dir = Path(test_case_dir)
+    inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
+    from_onnx(test_case_dir / "model.onnx", output_dir, inputs)
