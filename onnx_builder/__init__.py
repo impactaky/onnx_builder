@@ -1,2 +1,2 @@
 from onnx_builder.builder import Builder
-import onnx_builder.to_code
+from onnx_builder.to_code import CodeGenerator

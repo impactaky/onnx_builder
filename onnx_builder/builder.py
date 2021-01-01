@@ -4,8 +4,10 @@ from onnx import numpy_helper
 import numpy as np
 import onnx_builder.util
 
+
 def _eval_with_onnxruntime(model, inputs, output_names):
     import onnxruntime
+
     session = onnxruntime.InferenceSession(model.SerializeToString())
     return session.run(output_names, inputs)
 
@@ -68,7 +70,7 @@ class Builder:
         self.__outputs.append(named_array)
         return self.__outputs[-1]
 
-    def build(self):
+    def build(self, **kwargs):
         graph = onnx.helper.make_graph(
             self.__nodes,
             "onnx_eval",
@@ -76,15 +78,12 @@ class Builder:
             outputs=self.__output_vis,
             initializer=self.__initializers,
         )
-        opset_imports = None
-        if self.opset_version is not None:
-            opset_imports = [onnx.helper.make_operatorsetid("", self.opset_version)]
-        model = onnx.helper.make_model(graph, opset_imports=opset_imports)
+        model = onnx.helper.make_model(graph, **kwargs)
         model = onnx.shape_inference.infer_shapes(model)
         return model
 
-    def eval(self):
-        model = self.build()
+    def eval(self, **kwargs):
+        model = self.build(**kwargs)
         input_names = [vi.name for vi in self.__input_vis]
         inputs = dict(zip(input_names, self.__inputs))
         output_names = [vi.name for vi in self.__output_vis]
@@ -95,8 +94,8 @@ class Builder:
                     holder.array = array
         return (model, outputs)
 
-    def export(self, output_dir):
-        model, outputs = self.eval()
+    def export(self, output_dir, **kwargs):
+        model, outputs = self.eval(**kwargs)
         output_dir = Path(output_dir)
         (output_dir / "test_data_set_0").mkdir(parents=True, exist_ok=True)
         # save inputs
@@ -118,7 +117,9 @@ class Builder:
                 output_dir / "test_data_set_0" / "output_{}.pb".format(i), "wb"
             ) as f:
                 f.write(tmp_pb.SerializeToString())
-            self.__output_vis.append(onnx_builder.util.ndarray_to_value_info(output_, output_names[i]))
+            self.__output_vis.append(
+                onnx_builder.util.ndarray_to_value_info(output_, output_names[i])
+            )
         onnx.save(model, output_dir / "model.onnx")
 
     def __getattr__(self, op):
@@ -161,7 +162,10 @@ class Builder:
                 else:
                     return outputs
 
-            input_vis = [onnx_builder.util.ndarray_to_value_info(a, n) for n, a in zip(input_names, inputs)]
+            input_vis = [
+                onnx_builder.util.ndarray_to_value_info(a, n)
+                for n, a in zip(input_names, inputs)
+            ]
             output_vis = [onnx_builder.util.make_value_info(n) for n in output_names]
             graph = onnx.helper.make_graph(
                 [node],
