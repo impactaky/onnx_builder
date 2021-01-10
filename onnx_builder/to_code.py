@@ -4,7 +4,7 @@ import numpy as np
 import re
 from pathlib import Path
 import onnx_builder.util
-
+from google.protobuf.pyext._message import RepeatedCompositeContainer
 np.set_printoptions(linewidth=np.inf, threshold=np.inf)
 
 
@@ -49,6 +49,7 @@ class CodeGenerator:
         self.python_file.write(
             """import numpy as np
 from pathlib import Path
+import onnx
 import onnx_builder
 
 cwd = Path(__file__).parent
@@ -142,14 +143,67 @@ builder = onnx_builder.Builder(value_prefix='tmp')
             )
         self.python_file.write("\n")
 
-    def from_onnx(self, model):
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model)
-        self._impl_from_onnx(model)
-        self.python_file.write("builder.export(cwd/'exported')\n")
+    def proto_to_code(self, obj, indent=0):
+        if isinstance(obj, RepeatedCompositeContainer):
+            ret = " "*indent+"[\n"
+            for o in obj:
+                ret += self.proto_to_code(o, indent+4)+",\n"
+            ret += " "*indent+"]\n,"
+            return ret
+        if isinstance(obj, str):
+            return " "*indent+"'{}'".format(obj)
+        else:
+            return " "*indent+"{}".format(obj)
 
-    def from_test_case(self, test_case_dir):
-        test_case_dir = Path(test_case_dir)
-        inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
-        model = onnx.load(test_case_dir / "model.onnx")
-        self._impl_from_onnx(model, inputs)
+    def generate(self, model_or_test_case, output_dir):
+        self.output_dir = Path(output_dir)
+        if isinstance(model_or_test_case, onnx.ModelProto):
+            model = model_or_test_case
+            self.with_test_case = False
+        elif str(model_or_test_case).endswith(".onnx"):
+            model = onnx.load(model_or_test_case)
+            self.with_test_case = False
+        else:
+            test_case_dir = Path(model_or_test_case)
+            inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
+            model = onnx.load(test_case_dir/"model.onnx")
+            self.with_test_case = True
+
+        if self.with_test_case:
+            self._impl_from_onnx(model, inputs)
+        else:
+            self._impl_from_onnx(model)
+
+        opset_imports = getattr(model, "opset_import")
+        if opset_imports:
+            self.python_file.write("opset_imports = []\n")
+            for opset_import in opset_imports:
+                self.python_file.write("opset_imports.append(onnx.OperatorSetIdProto())\n")
+                if opset_import.domain:
+                    self.python_file.write("opset_imports[-1].domain = {}\n".format(self.proto_to_code(opset_import.domain)))
+                if opset_import.version:
+                    self.python_file.write("opset_imports[-1].version = {}\n".format(opset_import.version))
+
+        if self.with_test_case:
+            self.python_file.write("builder.export(\n")
+            self.python_file.write("    cwd/'exported',\n")
+        else:
+            self.python_file.write("model = builder.build(\n")
+
+        for field in onnx.ModelProto.DESCRIPTOR.fields:
+            if field.name in ["graph", "producer_name", "producer_version"]:
+                continue
+            v = getattr(model, field.name)
+            if not v:
+                continue
+            if field.name == "opset_import":
+                self.python_file.write("    opset_imports = opset_imports,\n")
+            else:
+                proto_code = self.proto_to_code(v)
+                self.python_file.write("    {} = {},\n".format(field.name, proto_code))
+
+        if self.with_test_case:
+            self.python_file.write(")\n")
+        else:
+            self.python_file.write(")\n")
+            self.python_file.write("onnx.save(model, 'exported/model.onnx')\n")

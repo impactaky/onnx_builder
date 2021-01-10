@@ -78,7 +78,9 @@ class Builder:
             outputs=self.__output_vis,
             initializer=self.__initializers,
         )
-        model = onnx.helper.make_model(graph, **kwargs)
+        model = onnx.helper.make_model(
+            graph, producer_name="onnx_builder", producer_version="0.01", **kwargs
+        )
         model = onnx.shape_inference.infer_shapes(model)
         return model
 
