@@ -1,10 +1,14 @@
+import re
+import shutil
+from pathlib import Path
+
+import numpy as np
 import onnx
 from onnx import numpy_helper
-import numpy as np
-import re
-from pathlib import Path
-import onnx_builder.util
 from google.protobuf.pyext._message import RepeatedCompositeContainer
+
+import onnx_builder.util
+
 np.set_printoptions(linewidth=np.inf, threshold=np.inf)
 
 
@@ -12,12 +16,21 @@ def to_python_name(name):
     return "v_" + re.sub(r"\W", "_", name)
 
 
+def proto_to_code(obj, indent=0):
+    if isinstance(obj, RepeatedCompositeContainer):
+        ret = " " * indent + "[\n"
+        for o in obj:
+            ret += proto_to_code(o, indent + 4) + ",\n"
+        ret += " " * indent + "]\n,"
+        return ret
+    if isinstance(obj, str):
+        return " " * indent + "'{}'".format(obj)
+    else:
+        return " " * indent + "{}".format(obj)
+
+
 class CodeGenerator:
-    def __init__(self, output_dir):
-        self.output_dir = Path(output_dir)
-        self.storage_dir = self.output_dir / "storage"
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-        self.python_file = open(self.output_dir / "exporter.py", "w")
+    def __init__(self):
         self.inline_threshold = 12
 
     def ndarray_to_str(self, array, name):
@@ -52,11 +65,13 @@ from pathlib import Path
 import onnx
 import onnx_builder
 
-cwd = Path(__file__).parent
+cwd = Path('{}')
 storage = cwd/'storage'
 builder = onnx_builder.Builder(value_prefix='tmp')
 
-"""
+""".format(
+                self.output_dir.resolve()
+            )
         )
 
         self.python_file.write("# inputs\n")
@@ -143,20 +158,13 @@ builder = onnx_builder.Builder(value_prefix='tmp')
             )
         self.python_file.write("\n")
 
-    def proto_to_code(self, obj, indent=0):
-        if isinstance(obj, RepeatedCompositeContainer):
-            ret = " "*indent+"[\n"
-            for o in obj:
-                ret += self.proto_to_code(o, indent+4)+",\n"
-            ret += " "*indent+"]\n,"
-            return ret
-        if isinstance(obj, str):
-            return " "*indent+"'{}'".format(obj)
-        else:
-            return " "*indent+"{}".format(obj)
-
     def generate(self, model_or_test_case, output_dir):
         self.output_dir = Path(output_dir)
+        if self.output_dir.exists():
+            shutil.rmtree(self.output_dir)
+        self.storage_dir = self.output_dir / "storage"
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.python_file = open(self.output_dir / "exporter.py", "w")
         if isinstance(model_or_test_case, onnx.ModelProto):
             model = model_or_test_case
             self.with_test_case = False
@@ -166,7 +174,7 @@ builder = onnx_builder.Builder(value_prefix='tmp')
         else:
             test_case_dir = Path(model_or_test_case)
             inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
-            model = onnx.load(test_case_dir/"model.onnx")
+            model = onnx.load(test_case_dir / "model.onnx")
             self.with_test_case = True
 
         if self.with_test_case:
@@ -178,11 +186,19 @@ builder = onnx_builder.Builder(value_prefix='tmp')
         if opset_imports:
             self.python_file.write("opset_imports = []\n")
             for opset_import in opset_imports:
-                self.python_file.write("opset_imports.append(onnx.OperatorSetIdProto())\n")
+                self.python_file.write(
+                    "opset_imports.append(onnx.OperatorSetIdProto())\n"
+                )
                 if opset_import.domain:
-                    self.python_file.write("opset_imports[-1].domain = {}\n".format(self.proto_to_code(opset_import.domain)))
+                    self.python_file.write(
+                        "opset_imports[-1].domain = {}\n".format(
+                            proto_to_code(opset_import.domain)
+                        )
+                    )
                 if opset_import.version:
-                    self.python_file.write("opset_imports[-1].version = {}\n".format(opset_import.version))
+                    self.python_file.write(
+                        "opset_imports[-1].version = {}\n".format(opset_import.version)
+                    )
 
         if self.with_test_case:
             self.python_file.write("builder.export(\n")
@@ -199,11 +215,14 @@ builder = onnx_builder.Builder(value_prefix='tmp')
             if field.name == "opset_import":
                 self.python_file.write("    opset_imports = opset_imports,\n")
             else:
-                proto_code = self.proto_to_code(v)
-                self.python_file.write("    {} = {},\n".format(field.name, proto_code))
+                self.python_file.write(
+                    "    {} = {},\n".format(field.name, proto_to_code(v))
+                )
 
         if self.with_test_case:
             self.python_file.write(")\n")
         else:
             self.python_file.write(")\n")
-            self.python_file.write("onnx.save(model, 'exported/model.onnx')\n")
+            self.python_file.write("(cwd/'exported').mkdir(exist_ok=True)\n")
+            self.python_file.write("onnx.save(model, cwd/'exported'/'model.onnx')\n")
+        self.python_file.close()
