@@ -18,8 +18,10 @@ def ndarray_to_value_info(arr: np.ndarray, name: str) -> onnx.ValueInfoProto:
     )
 
 
-def get_shape_from_value_info(vi: onnx.ValueInfoProto):
+def value_info_to_numpy_info(vi: onnx.ValueInfoProto):
     t = vi.type
+    shape = 0
+    elem_type = np.float32
     if t.WhichOneof("value") == "tensor_type":
         if t.tensor_type.HasField("shape"):
             if len(t.tensor_type.shape.dim):
@@ -29,12 +31,14 @@ def get_shape_from_value_info(vi: onnx.ValueInfoProto):
                     assert which is not None
                     return getattr(dim, which)
 
-                return tuple(map(dim_to_val, t.tensor_type.shape.dim))
+                shape = tuple(map(dim_to_val, t.tensor_type.shape.dim))
             else:
-                return 1
-    if t.WhichOneof("value") is None:
-        return 0
-    return "Unknown type {}".format(t.WhichOneof("value"))
+                shape = 1
+        if t.tensor_type.HasField("elem_type"):
+            elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
+                getattr(t.tensor_type, "elem_type")
+            ]
+    return (shape, elem_type)
 
 
 def get_uninitialized_input_names(model):

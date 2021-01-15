@@ -58,7 +58,7 @@ class Builder:
         self.__input_vis.append(onnx_builder.util.ndarray_to_value_info(array, name))
         return NamedArray(name, array)
 
-    def Output(self, named_array, name=""):
+    def Output(self, named_array, name="", shape=[], dtype: np.dtype = np.float32):
         if name:
             for node in self.__nodes:
                 if named_array.name in node.output:
@@ -66,7 +66,15 @@ class Builder:
                     node.output[index] = name
                     break
             named_array.name = name
-        self.__output_vis.append(onnx_builder.util.make_value_info(named_array.name))
+        if shape:
+            dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+            self.__output_vis.append(
+                onnx.helper.make_tensor_value_info(named_array.name, dtype, shape)
+            )
+        else:
+            self.__output_vis.append(
+                onnx_builder.util.make_value_info(named_array.name)
+            )
         self.__outputs.append(named_array)
         return self.__outputs[-1]
 

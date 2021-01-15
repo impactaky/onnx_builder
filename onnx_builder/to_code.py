@@ -80,10 +80,11 @@ builder = onnx_builder.Builder(value_prefix='tmp')
             for input_ in model.graph.input:
                 if input_.name in initializers:
                     continue
+                (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(input_)
                 self.python_file.write(
                     "{} = builder.Input(np.empty({}, dtype=np.{}), name='{}')\n".format(
                         to_python_name(input_.name),
-                        onnx_builder.util.get_shape_from_value_info(input_),
+                        shape,
                         onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
                             getattr(input_.type.tensor_type, "elem_type")
                         ],
@@ -151,11 +152,16 @@ builder = onnx_builder.Builder(value_prefix='tmp')
 
         self.python_file.write("#outputs\n")
         for output in model.graph.output:
-            self.python_file.write(
-                "builder.Output({}, name='{}')\n".format(
-                    to_python_name(output.name), output.name
-                )
+            output_str = "builder.Output({}, name='{}'".format(
+                to_python_name(output.name), output.name
             )
+            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(output)
+            if shape:
+                output_str += ", shape={}".format(shape)
+            if dtype != np.float32:
+                output_str += ", dtype=np.{}".format(dtype)
+            output_str += ")\n"
+            self.python_file.write(output_str)
         self.python_file.write("\n")
 
     def generate(self, model_or_test_case, output_dir):
