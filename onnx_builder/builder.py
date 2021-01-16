@@ -51,11 +51,16 @@ class Builder:
         self.__initializers.append(tensor)
         return NamedArray(name, array)
 
-    def Input(self, array, name=""):
-        self.__inputs.append(array)
+    def Input(self, array=None, name="", shape=None, dtype=None):
+        if array is not None:
+            self.__inputs.append(array)
         if not name:
             name = self.__GenValueName()
-        self.__input_vis.append(onnx_builder.util.ndarray_to_value_info(array, name))
+        self.__input_vis.append(
+            onnx_builder.util.ndarray_to_value_info(
+                array, name, shape=shape, dtype=dtype
+            )
+        )
         return NamedArray(name, array)
 
     def Output(self, named_array, name="", shape=[], dtype: np.dtype = np.float32):

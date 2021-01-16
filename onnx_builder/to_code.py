@@ -82,7 +82,7 @@ builder = onnx_builder.Builder(value_prefix='tmp')
                     continue
                 (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(input_)
                 self.python_file.write(
-                    "{} = builder.Input(np.empty({}, dtype=np.{}), name='{}')\n".format(
+                    "{} = builder.Input(shape={}, dtype=np.{}, name='{}')\n".format(
                         to_python_name(input_.name),
                         shape,
                         onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[

@@ -10,11 +10,19 @@ def make_value_info(name: str) -> onnx.ValueInfoProto:
     return vi
 
 
-def ndarray_to_value_info(arr: np.ndarray, name: str) -> onnx.ValueInfoProto:
+def ndarray_to_value_info(
+    arr: np.ndarray, name: str, shape=None, dtype=None
+) -> onnx.ValueInfoProto:
+    if dtype is None:
+        dtype = arr.dtype
+    else:
+        dtype = np.dtype(dtype)
+    if shape is None:
+        shape = arr.shape
     return onnx.helper.make_tensor_value_info(
         name=name,
-        elem_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[arr.dtype],
-        shape=arr.shape,
+        elem_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[dtype],
+        shape=shape,
     )
 
 
@@ -33,7 +41,7 @@ def value_info_to_numpy_info(vi: onnx.ValueInfoProto):
 
                 shape = tuple(map(dim_to_val, t.tensor_type.shape.dim))
             else:
-                shape = 1
+                shape = []
         if t.tensor_type.HasField("elem_type"):
             elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
                 getattr(t.tensor_type, "elem_type")
