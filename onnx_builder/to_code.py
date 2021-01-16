@@ -156,10 +156,8 @@ builder = onnx_builder.Builder(value_prefix='tmp')
                 to_python_name(output.name), output.name
             )
             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(output)
-            if shape:
-                output_str += ", shape={}".format(shape)
-            if dtype != np.float32:
-                output_str += ", dtype=np.{}".format(dtype)
+            output_str += ", shape={}".format(shape)
+            output_str += ", dtype=np.{}".format(dtype)
             output_str += ")\n"
             self.python_file.write(output_str)
         self.python_file.write("\n")
