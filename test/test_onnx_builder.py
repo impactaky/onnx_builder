@@ -21,13 +21,34 @@ def test_function(onnx_file):
     orig_model = onnx.load(onnx_file)
     exported_model = onnx.load(work_dir / "exported" / "model.onnx")
 
-    assert orig_model.graph.input == exported_model.graph.input
-    assert orig_model.graph.initializer == exported_model.graph.initializer
-    assert orig_model.graph.output == exported_model.graph.output
+    assert (
+        orig_model.graph.input == exported_model.graph.input
+    ), "{}\n------------------------\n{}".format(
+        orig_model.graph.input, exported_model.graph.input
+    )
+    assert (
+        orig_model.graph.initializer == exported_model.graph.initializer
+    ), "{}\n------------------------\n{}".format(
+        orig_model.graph.initializer, exported_model.graph.initializer
+    )
+    assert (
+        orig_model.graph.output == exported_model.graph.output
+    ), "{}\n------------------------\n{}".format(
+        orig_model.graph.output, exported_model.graph.output
+    )
 
     for field in onnx.ModelProto.DESCRIPTOR.fields:
         if field.name in ["graph", "producer_name", "producer_version"]:
             continue
         orig_attr = getattr(orig_model, field.name)
         exported_attr = getattr(exported_model, field.name)
-        assert orig_attr == exported_attr
+        if field.name == "opset_import":
+            for opset_import in orig_attr:
+                if not opset_import.domain:
+                    opset_import.domain = ""
+            for opset_import in exported_attr:
+                if not opset_import.domain:
+                    opset_import.domain = ""
+        assert orig_attr == exported_attr, "{}\n------------------------\n{}".format(
+            orig_attr, exported_attr
+        )

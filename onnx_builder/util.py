@@ -36,7 +36,8 @@ def value_info_to_numpy_info(vi: onnx.ValueInfoProto):
 
                 def dim_to_val(dim):
                     which = dim.WhichOneof("value")
-                    assert which is not None
+                    if which is None:
+                        return None
                     return getattr(dim, which)
 
                 shape = tuple(map(dim_to_val, t.tensor_type.shape.dim))
