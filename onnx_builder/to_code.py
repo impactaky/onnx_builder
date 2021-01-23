@@ -30,8 +30,11 @@ def proto_to_code(obj, indent=0):
 
 
 class CodeGenerator:
-    def __init__(self):
-        self.inline_threshold = 12
+    def __init__(self, builder_name="builder", subgraph_index=0, inline_threshold=12):
+        self.base_indent = 0
+        self.inline_threshold = inline_threshold
+        self.subgraph_index = subgraph_index
+        self.builder_name = builder_name
 
     def ndarray_to_str(self, array, name):
         if not array.shape:
@@ -58,66 +61,69 @@ class CodeGenerator:
         name = to_python_name(tensor.name)
         return self.ndarray_to_str(array, name)
 
-    def _impl_from_onnx(self, model, inputs=None):
-        self.python_file.write(
-            """import numpy as np
-from pathlib import Path
-import onnx
-import onnx_builder
+    def write(self, line=""):
+        self.python_file.write(" " * self.base_indent + str(line) + "\n")
 
-cwd = Path('{}')
-storage = cwd/'storage'
-builder = onnx_builder.Builder(value_prefix='tmp')
-
-""".format(
-                self.output_dir.resolve()
-            )
-        )
-
-        self.python_file.write("# inputs\n")
+    def graph_to_code(self, graph, inputs=None):
+        self.write("# inputs")
         if not inputs:
-            initializers = [x.name for x in model.graph.initializer]
-            for input_ in model.graph.input:
+            initializers = [x.name for x in graph.initializer]
+            for input_ in graph.input:
                 if input_.name in initializers:
                     continue
-                (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(input_)
-                self.python_file.write(
-                    "{} = builder.Input(shape={}, dtype=np.{}, name='{}')\n".format(
-                        to_python_name(input_.name),
-                        shape,
-                        onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
-                            getattr(input_.type.tensor_type, "elem_type")
-                        ],
-                        input_.name,
+                if input_.type.WhichOneof("value") == "tensor_type":
+                    (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(input_)
+                    self.write(
+                        "{} = {}.Input(shape={}, dtype=np.{}, name='{}')".format(
+                            to_python_name(input_.name),
+                            self.builder_name,
+                            shape,
+                            onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
+                                getattr(input_.type.tensor_type, "elem_type")
+                            ],
+                            input_.name,
+                        )
                     )
-                )
+                else:
+                    self.write(
+                        "{} = {}.Input(name='{}')".format(
+                            to_python_name(input_.name),
+                            self.builder_name,
+                            input_.name,
+                        )
+                    )
         else:
             for name, array in inputs.items():
-                self.python_file.write(
-                    "{} = builder.Input({}, name='{}')\n".format(
+                self.write(
+                    "{} = {}.Input({}, name='{}')".format(
                         to_python_name(name),
+                        self.builder_name,
                         self.ndarray_to_str(array, name),
                         name,
                     )
                 )
-        self.python_file.write("\n")
+        self.write()
 
-        self.python_file.write("# initializers\n")
-        for initializer in model.graph.initializer:
+        self.write("# initializers")
+        for initializer in graph.initializer:
             self.python_file.write(
-                "{} = builder.Initializer({}, name='{}')\n".format(
+                "{} = {}.Initializer({}, name='{}')\n".format(
                     to_python_name(initializer.name),
+                    self.builder_name,
                     self.tensor_to_str(initializer),
                     initializer.name,
                 )
             )
-        self.python_file.write("\n")
+        self.write()
 
-        self.python_file.write("# nodes\n")
-        for node in model.graph.node:
+        self.write("# nodes")
+        input_names = [x.name for x in graph.input]
+        for node in graph.node:
             attributes = ""
             if len(node.output) > 1:
                 attributes += "outs={}, ".format(len(node.output))
+            if node.output:
+                attributes += "output_names={}, ".format(node.output)
             if node.name:
                 attributes += "name='{}', ".format(node.name)
             for i, attr in enumerate(node.attribute):
@@ -126,41 +132,66 @@ builder = onnx_builder.Builder(value_prefix='tmp')
                 value = onnx.helper.get_attribute_value(attr)
                 if type(value) == onnx.TensorProto:
                     value = self.tensor_to_str(value)
+                if type(value) == onnx.GraphProto:
+                    graph_name = "subgraph{}".format(self.subgraph_index)
+                    self.subgraph_index += 1
+                    generator = onnx_builder.CodeGenerator(
+                        builder_name=graph_name + "_builder",
+                        subgraph_index=self.subgraph_index,
+                    )
+                    generator.python_file = self.python_file
+                    generator.write(
+                        "{}_builder = onnx_builder.Builder(value_prefix='{}_tmp')".format(
+                            graph_name, graph_name
+                        )
+                    )
+                    generator.graph_to_code(value)
+                    generator.write(
+                        "{} = {}_builder.make_graph()".format(graph_name, graph_name)
+                    )
+                    self.subgraph_index = generator.subgraph_index
+                    value = graph_name
                 attributes += "{}={}".format(attr.name, value)
 
             outputs = [to_python_name(output) for output in node.output]
+            input_names += node.output
             if outputs:
                 outputs = "{}".format(outputs)
                 outputs = re.sub(r"[\[\]\']", "", outputs)
             else:
                 outputs = ""
-            inputs = [
-                to_python_name(input_) if input_ else None for input_ in node.input
-            ]
+            inputs = []
+            for input_ in node.input:
+                if input_:
+                    inputs.append(to_python_name(input_))
+                else:
+                    inputs.append(None)
+
             if inputs:
                 inputs = "{}, ".format(inputs)
                 inputs = re.sub(r"[\[\]\']", "", inputs)
             else:
                 inputs = ""
 
-            self.python_file.write(
-                "{} = builder.{}({}{})\n".format(
-                    outputs, node.op_type, inputs, attributes
+            self.write(
+                "{} = {}.{}({}{})".format(
+                    outputs, self.builder_name, node.op_type, inputs, attributes
                 )
             )
-        self.python_file.write("\n")
+        self.write()
 
-        self.python_file.write("#outputs\n")
-        for output in model.graph.output:
-            output_str = "builder.Output({}, name='{}'".format(
-                to_python_name(output.name), output.name
+        self.write("#outputs")
+        for output in graph.output:
+            output_str = "{}.Output({}, name='{}'".format(
+                self.builder_name, to_python_name(output.name), output.name
             )
-            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(output)
-            output_str += ", shape={}".format(shape)
-            output_str += ", dtype=np.{}".format(dtype)
-            output_str += ")\n"
-            self.python_file.write(output_str)
-        self.python_file.write("\n")
+            if output.type.WhichOneof("value") == "tensor_type":
+                (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(output)
+                output_str += ", shape={}".format(shape)
+                output_str += ", dtype=np.{}".format(dtype)
+            output_str += ")"
+            self.write(output_str)
+        self.write()
 
     def generate(self, model_or_test_case, output_dir):
         self.output_dir = Path(output_dir)
@@ -181,34 +212,43 @@ builder = onnx_builder.Builder(value_prefix='tmp')
             model = onnx.load(test_case_dir / "model.onnx")
             self.with_test_case = True
 
+        self.write("import numpy as np")
+        self.write("from pathlib import Path")
+        self.write("import onnx")
+        self.write("import onnx_builder")
+        self.write()
+        self.write("cwd = Path('{}')".format(self.output_dir.resolve()))
+        self.write("storage = cwd/'storage'")
+        self.write(
+            "{} = onnx_builder.Builder(value_prefix='tmp')".format(self.builder_name)
+        )
+
         if self.with_test_case:
-            self._impl_from_onnx(model, inputs)
+            self.graph_to_code(model.graph, inputs)
         else:
-            self._impl_from_onnx(model)
+            self.graph_to_code(model.graph)
 
         opset_imports = getattr(model, "opset_import")
         if opset_imports:
-            self.python_file.write("opset_imports = []\n")
+            self.write("opset_imports = []")
             for opset_import in opset_imports:
-                self.python_file.write(
-                    "opset_imports.append(onnx.OperatorSetIdProto())\n"
-                )
+                self.write("opset_imports.append(onnx.OperatorSetIdProto())")
                 if opset_import.domain:
-                    self.python_file.write(
-                        "opset_imports[-1].domain = {}\n".format(
+                    self.write(
+                        "opset_imports[-1].domain = {}".format(
                             proto_to_code(opset_import.domain)
                         )
                     )
                 if opset_import.version:
-                    self.python_file.write(
-                        "opset_imports[-1].version = {}\n".format(opset_import.version)
+                    self.write(
+                        "opset_imports[-1].version = {}".format(opset_import.version)
                     )
 
         if self.with_test_case:
-            self.python_file.write("builder.export(\n")
-            self.python_file.write("    cwd/'exported',\n")
+            self.write("{}.export(".format(self.builder_name))
+            self.write("    cwd/'exported',")
         else:
-            self.python_file.write("model = builder.build(\n")
+            self.write("model = {}.build(".format(self.builder_name))
 
         for field in onnx.ModelProto.DESCRIPTOR.fields:
             if field.name in ["graph", "producer_name", "producer_version"]:
@@ -217,16 +257,11 @@ builder = onnx_builder.Builder(value_prefix='tmp')
             if not v:
                 continue
             if field.name == "opset_import":
-                self.python_file.write("    opset_imports = opset_imports,\n")
+                self.write("    opset_imports = opset_imports,")
             else:
-                self.python_file.write(
-                    "    {} = {},\n".format(field.name, proto_to_code(v))
-                )
-
-        if self.with_test_case:
-            self.python_file.write(")\n")
-        else:
-            self.python_file.write(")\n")
-            self.python_file.write("(cwd/'exported').mkdir(exist_ok=True)\n")
-            self.python_file.write("onnx.save(model, cwd/'exported'/'model.onnx')\n")
+                self.write("    {} = {},".format(field.name, proto_to_code(v)))
+        self.write(")")
+        if not self.with_test_case:
+            self.write("(cwd/'exported').mkdir(exist_ok=True)")
+            self.write("onnx.save(model, cwd/'exported'/'model.onnx')")
         self.python_file.close()

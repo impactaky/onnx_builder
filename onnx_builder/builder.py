@@ -12,8 +12,8 @@ def _eval_with_onnxruntime(model, inputs, output_names):
     return session.run(output_names, inputs)
 
 
-class NamedArray:
-    def __init__(self, name, array):
+class Value:
+    def __init__(self, name, array=None):
         self.name = name
         self.array = array
 
@@ -49,7 +49,7 @@ class Builder:
         self.__input_vis.append(onnx_builder.util.ndarray_to_value_info(array, name))
         tensor = numpy_helper.from_array(array, name=name)
         self.__initializers.append(tensor)
-        return NamedArray(name, array)
+        return Value(name, array)
 
     def Input(self, array=None, name="", shape=None, dtype=None):
         if array is not None:
@@ -61,7 +61,7 @@ class Builder:
                 array, name, shape=shape, dtype=dtype
             )
         )
-        return NamedArray(name, array)
+        return Value(name, array)
 
     def Output(self, named_array, name="", shape=None, dtype=None):
         if name:
@@ -83,14 +83,17 @@ class Builder:
         self.__outputs.append(named_array)
         return self.__outputs[-1]
 
-    def build(self, **kwargs):
-        graph = onnx.helper.make_graph(
+    def make_graph(self):
+        return onnx.helper.make_graph(
             self.__nodes,
             "onnx_eval",
             inputs=self.__input_vis,
             outputs=self.__output_vis,
             initializer=self.__initializers,
         )
+
+    def build(self, **kwargs):
+        graph = self.make_graph()
         model = onnx.helper.make_model(
             graph, producer_name="onnx_builder", producer_version="0.01", **kwargs
         )
@@ -138,11 +141,11 @@ class Builder:
         onnx.save(model, output_dir / "model.onnx")
 
     def __getattr__(self, op):
-        def fn(*args, outs=1, name=None, **kwargs):
+        def fn(*args, outs=1, output_names=[], name=None, **kwargs):
             inputs = list(args)
             input_names = []
             for i, input_ in enumerate(inputs):
-                if type(input_) == NamedArray:
+                if type(input_) == Value:
                     input_names.append(input_.name)
                     inputs[i] = input_.array
                 elif input_ is None:
@@ -161,7 +164,8 @@ class Builder:
                         )
                     )
 
-            output_names = [self.__GenValueName() for i in range(outs)]
+            if not output_names:
+                output_names = [self.__GenValueName() for i in range(outs)]
             for k, v in kwargs.items():
                 if type(v) == np.ndarray:
                     kwargs[k] = onnx.numpy_helper.from_array(v, self.__GenValueName())
@@ -171,7 +175,7 @@ class Builder:
             self.__nodes.append(node)
 
             if not self.eval_each_node:
-                outputs = [NamedArray(name, None) for name in output_names]
+                outputs = [Value(name) for name in output_names]
                 if outs == 1:
                     return outputs[0]
                 else:
@@ -197,7 +201,7 @@ class Builder:
             inputs = dict(zip(input_names, inputs))
             outputs = self.__eval_func(model, inputs, output_names)
             for i, output_ in enumerate(outputs):
-                outputs[i] = NamedArray(output_names[i], output_)
+                outputs[i] = Value(output_names[i], output_)
             if outs == 1:
                 return outputs[0]
             else:

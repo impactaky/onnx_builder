@@ -14,11 +14,15 @@ def ndarray_to_value_info(
     arr: np.ndarray, name: str, shape=None, dtype=None
 ) -> onnx.ValueInfoProto:
     if dtype is None:
-        dtype = arr.dtype
+        if isinstance(arr, np.ndarray):
+            dtype = arr.dtype
     else:
         dtype = np.dtype(dtype)
     if shape is None:
-        shape = arr.shape
+        if isinstance(arr, np.ndarray):
+            shape = arr.shape
+    if shape is None:
+        return onnx.helper.make_empty_tensor_value_info(name)
     return onnx.helper.make_tensor_value_info(
         name=name,
         elem_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[dtype],
@@ -28,25 +32,26 @@ def ndarray_to_value_info(
 
 def value_info_to_numpy_info(vi: onnx.ValueInfoProto):
     t = vi.type
+    if t.WhichOneof("value") != "tensor_type":
+        return (None, None)
     shape = 0
     elem_type = np.float32
-    if t.WhichOneof("value") == "tensor_type":
-        if t.tensor_type.HasField("shape"):
-            if len(t.tensor_type.shape.dim):
+    if t.tensor_type.HasField("shape"):
+        if len(t.tensor_type.shape.dim):
 
-                def dim_to_val(dim):
-                    which = dim.WhichOneof("value")
-                    if which is None:
-                        return None
-                    return getattr(dim, which)
+            def dim_to_val(dim):
+                which = dim.WhichOneof("value")
+                if which is None:
+                    return None
+                return getattr(dim, which)
 
-                shape = tuple(map(dim_to_val, t.tensor_type.shape.dim))
-            else:
-                shape = []
-        if t.tensor_type.HasField("elem_type"):
-            elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
-                getattr(t.tensor_type, "elem_type")
-            ]
+            shape = tuple(map(dim_to_val, t.tensor_type.shape.dim))
+        else:
+            shape = []
+    if t.tensor_type.HasField("elem_type"):
+        elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
+            getattr(t.tensor_type, "elem_type")
+        ]
     return (shape, elem_type)
 
 
