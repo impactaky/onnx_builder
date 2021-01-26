@@ -64,6 +64,30 @@ class CodeGenerator:
     def write(self, line=""):
         self.python_file.write(" " * self.base_indent + str(line) + "\n")
 
+    def value_info_to_code(self, vi):
+        if vi.type.WhichOneof("value") == "tensor_type":
+            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(vi)
+            return (
+                "",
+                "shape={}, dtype=np.{}, name='{}'".format(
+                    shape,
+                    dtype,
+                    vi.name,
+                ),
+            )
+        elif vi.type.WhichOneof("value") == "sequence_type":
+            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(vi)
+            return (
+                "Sequence",
+                "shape={}, dtype=np.{}, name='{}'".format(
+                    shape,
+                    dtype,
+                    vi.name,
+                ),
+            )
+        else:
+            return ("", "name='{}'".format(vi.name))
+
     def graph_to_code(self, graph, inputs=None):
         self.write("# inputs")
         if not inputs:
@@ -71,27 +95,15 @@ class CodeGenerator:
             for input_ in graph.input:
                 if input_.name in initializers:
                     continue
-                if input_.type.WhichOneof("value") == "tensor_type":
-                    (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(input_)
-                    self.write(
-                        "{} = {}.Input(shape={}, dtype=np.{}, name='{}')".format(
-                            to_python_name(input_.name),
-                            self.builder_name,
-                            shape,
-                            onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
-                                getattr(input_.type.tensor_type, "elem_type")
-                            ],
-                            input_.name,
-                        )
+                (input_type, input_args) = self.value_info_to_code(input_)
+                self.write(
+                    "{} = {}.Input{}({})".format(
+                        to_python_name(input_.name),
+                        self.builder_name,
+                        input_type,
+                        input_args,
                     )
-                else:
-                    self.write(
-                        "{} = {}.Input(name='{}')".format(
-                            to_python_name(input_.name),
-                            self.builder_name,
-                            input_.name,
-                        )
-                    )
+                )
         else:
             for name, array in inputs.items():
                 self.write(
@@ -182,15 +194,15 @@ class CodeGenerator:
 
         self.write("#outputs")
         for output in graph.output:
-            output_str = "{}.Output({}, name='{}'".format(
-                self.builder_name, to_python_name(output.name), output.name
+            (output_type, output_args) = self.value_info_to_code(output)
+            self.write(
+                "{}.Output{}({}, {})".format(
+                    self.builder_name,
+                    output_type,
+                    to_python_name(output.name),
+                    output_args,
+                )
             )
-            if output.type.WhichOneof("value") == "tensor_type":
-                (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(output)
-                output_str += ", shape={}".format(shape)
-                output_str += ", dtype=np.{}".format(dtype)
-            output_str += ")"
-            self.write(output_str)
         self.write()
 
     def generate(self, model_or_test_case, output_dir):
