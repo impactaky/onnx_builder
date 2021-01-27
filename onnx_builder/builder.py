@@ -63,6 +63,16 @@ class Builder:
         )
         return Value(name, array)
 
+    def InputSequence(self, list_=None, name="", shape=None, dtype=None):
+        if not name:
+            name = self.__GenValueName()
+        self.__input_vis.append(
+            onnx.helper.make_sequence_value_info(
+                name, onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], shape
+            )
+        )
+        return Value(name, list_)
+
     def Output(self, named_array, name="", shape=None, dtype=None):
         if name:
             for node in self.__nodes:
@@ -71,15 +81,25 @@ class Builder:
                     node.output[index] = name
                     break
             named_array.name = name
-        if shape is not None:
-            dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
-            self.__output_vis.append(
-                onnx.helper.make_tensor_value_info(named_array.name, dtype, shape)
-            )
-        else:
-            self.__output_vis.append(
-                onnx_builder.util.make_value_info(named_array.name)
-            )
+        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        self.__output_vis.append(
+            onnx.helper.make_tensor_value_info(named_array.name, dtype, shape)
+        )
+        self.__outputs.append(named_array)
+        return self.__outputs[-1]
+
+    def OutputSequence(self, named_array, name="", shape=None, dtype=None):
+        if name:
+            for node in self.__nodes:
+                if named_array.name in node.output:
+                    index = list(node.output).index(named_array.name)
+                    node.output[index] = name
+                    break
+            named_array.name = name
+        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        self.__output_vis.append(
+            onnx.helper.make_sequence_value_info(named_array.name, dtype, shape)
+        )
         self.__outputs.append(named_array)
         return self.__outputs[-1]
 
@@ -97,7 +117,7 @@ class Builder:
         model = onnx.helper.make_model(
             graph, producer_name="onnx_builder", producer_version="0.01", **kwargs
         )
-        model = onnx.shape_inference.infer_shapes(model)
+        # model = onnx.shape_inference.infer_shapes(model)
         return model
 
     def eval(self, **kwargs):

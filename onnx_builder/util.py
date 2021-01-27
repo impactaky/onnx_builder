@@ -30,14 +30,11 @@ def ndarray_to_value_info(
     )
 
 
-def value_info_to_numpy_info(vi: onnx.ValueInfoProto):
-    t = vi.type
-    if t.WhichOneof("value") != "tensor_type":
-        return (None, None)
-    shape = 0
+def value_info_to_numpy_info(tp: onnx.TensorProto):
+    shape = None
     elem_type = np.float32
-    if t.tensor_type.HasField("shape"):
-        if len(t.tensor_type.shape.dim):
+    if tp.HasField("shape"):
+        if len(tp.shape.dim):
 
             def dim_to_val(dim):
                 which = dim.WhichOneof("value")
@@ -45,13 +42,11 @@ def value_info_to_numpy_info(vi: onnx.ValueInfoProto):
                     return None
                 return getattr(dim, which)
 
-            shape = tuple(map(dim_to_val, t.tensor_type.shape.dim))
+            shape = tuple(map(dim_to_val, tp.shape.dim))
         else:
             shape = []
-    if t.tensor_type.HasField("elem_type"):
-        elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
-            getattr(t.tensor_type, "elem_type")
-        ]
+    if tp.HasField("elem_type"):
+        elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[getattr(tp, "elem_type")]
     return (shape, elem_type)
 
 

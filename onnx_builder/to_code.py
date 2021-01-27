@@ -66,7 +66,9 @@ class CodeGenerator:
 
     def value_info_to_code(self, vi):
         if vi.type.WhichOneof("value") == "tensor_type":
-            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(vi)
+            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
+                vi.type.tensor_type
+            )
             return (
                 "",
                 "shape={}, dtype=np.{}, name='{}'".format(
@@ -76,7 +78,9 @@ class CodeGenerator:
                 ),
             )
         elif vi.type.WhichOneof("value") == "sequence_type":
-            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(vi)
+            (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
+                vi.type.sequence_type.elem_type.tensor_type
+            )
             return (
                 "Sequence",
                 "shape={}, dtype=np.{}, name='{}'".format(
