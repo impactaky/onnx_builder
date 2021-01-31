@@ -76,3 +76,21 @@ def load_inputs_from_test_case(test_case_dir, test_case_name="test_data_set_0"):
             tensor.name = input_names.pop(0)
         inputs[tensor.name] = onnx.numpy_helper.to_array(tensor)
     return inputs
+
+
+def load_outputs_from_test_case(test_case_dir, test_case_name="test_data_set_0"):
+    test_case_dir = Path(test_case_dir)
+    model = onnx.load(test_case_dir / "model.onnx")
+    output_names = [x.name for x in model.graph.output]
+    output_pbs = glob.glob(str(test_case_dir / test_case_name / "output_*.pb"))
+    outputs = {}
+    for output_pb in output_pbs:
+        with open(output_pb, "rb") as f:
+            tensor = onnx.TensorProto()
+            tensor.ParseFromString(f.read())
+        if tensor.name in output_names:
+            output_names.remove(tensor.name)
+        else:
+            tensor.name = output_names.pop(0)
+        outputs[tensor.name] = onnx.numpy_helper.to_array(tensor)
+    return outputs
