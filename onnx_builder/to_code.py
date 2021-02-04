@@ -92,32 +92,32 @@ class CodeGenerator:
         else:
             return ("", "name='{}'".format(vi.name))
 
-    def graph_to_code(self, graph, inputs=None):
+    def graph_to_code(self, graph, inputs={}):
         self.write("# inputs")
-        if not inputs:
-            initializers = [x.name for x in graph.initializer]
-            for input_ in graph.input:
-                if input_.name in initializers:
-                    continue
-                (input_type, input_args) = self.value_info_to_code(input_)
-                self.write(
-                    "{} = {}.Input{}({})".format(
-                        to_python_name(input_.name),
-                        self.builder_name,
-                        input_type,
-                        input_args,
-                    )
-                )
-        else:
-            for name, array in inputs.items():
+        initializers = [x.name for x in graph.initializer]
+        for input_ in graph.input:
+            name = input_.name
+            if name in inputs:
                 self.write(
                     "{} = {}.Input({}, name='{}')".format(
                         to_python_name(name),
                         self.builder_name,
-                        self.ndarray_to_str(array, name),
+                        self.ndarray_to_str(inputs[name], name),
                         name,
                     )
                 )
+                continue
+            if name in initializers:
+                continue
+            (input_type, input_args) = self.value_info_to_code(input_)
+            self.write(
+                "{} = {}.Input{}({})".format(
+                    to_python_name(name),
+                    self.builder_name,
+                    input_type,
+                    input_args,
+                )
+            )
         self.write()
 
         self.write("# initializers")
