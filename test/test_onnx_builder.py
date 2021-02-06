@@ -33,7 +33,7 @@ onnx_runtime_fail_list = [
     "test_bitshift_left_uint16",
     "test_adagrad",
 ]
-test_cases = onnx_files[:100]
+test_cases = onnx_files
 test_cases = [
     Path(f).parent
     for f in test_cases

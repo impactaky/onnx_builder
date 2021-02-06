@@ -219,9 +219,11 @@ class CodeGenerator:
         if isinstance(model_or_test_case, onnx.ModelProto):
             model = model_or_test_case
             self.with_test_case = False
+            inputs = {}
         elif str(model_or_test_case).endswith(".onnx"):
             model = onnx.load(model_or_test_case)
             self.with_test_case = False
+            inputs = {}
         else:
             test_case_dir = Path(model_or_test_case)
             inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
@@ -239,10 +241,7 @@ class CodeGenerator:
             "{} = onnx_builder.Builder(value_prefix='tmp')".format(self.builder_name)
         )
 
-        if self.with_test_case:
-            self.graph_to_code(model.graph, inputs)
-        else:
-            self.graph_to_code(model.graph)
+        self.graph_to_code(model.graph, inputs)
 
         opset_imports = getattr(model, "opset_import")
         if opset_imports:

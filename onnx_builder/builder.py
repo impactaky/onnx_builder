@@ -81,10 +81,15 @@ class Builder:
                     node.output[index] = name
                     break
             named_array.name = name
-        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
-        self.__output_vis.append(
-            onnx.helper.make_tensor_value_info(named_array.name, dtype, shape)
-        )
+        if dtype is None:
+            self.__output_vis.append(
+                onnx.helper.make_empty_tensor_value_info(named_array.name)
+            )
+        else:
+            dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+            self.__output_vis.append(
+                onnx.helper.make_tensor_value_info(named_array.name, dtype, shape)
+            )
         self.__outputs.append(named_array)
         return self.__outputs[-1]
 
@@ -103,17 +108,19 @@ class Builder:
         self.__outputs.append(named_array)
         return self.__outputs[-1]
 
-    def make_graph(self):
+    def make_graph(self, name=""):
+        if not name:
+            name = self.__GenValueName()
         return onnx.helper.make_graph(
             self.__nodes,
-            "onnx_eval",
+            name,
             inputs=self.__input_vis,
             outputs=self.__output_vis,
             initializer=self.__initializers,
         )
 
-    def build(self, **kwargs):
-        graph = self.make_graph()
+    def build(self, graph_name="model.root", **kwargs):
+        graph = self.make_graph(name=graph_name)
         model = onnx.helper.make_model(
             graph, producer_name="onnx_builder", producer_version="0.01", **kwargs
         )
@@ -208,7 +215,7 @@ class Builder:
             output_vis = [onnx_builder.util.make_value_info(n) for n in output_names]
             graph = onnx.helper.make_graph(
                 [node],
-                "onnx_eval",
+                "onnx_eval.each_eval",
                 inputs=input_vis,
                 outputs=output_vis,
                 initializer=self.__initializers,
