@@ -37,24 +37,19 @@ class CodeGenerator:
         self.builder_name = builder_name
 
     def ndarray_to_str(self, array, name):
-        if not array.shape:
-            return "np.array([{}], dtype=np.{}).reshape([])".format(
-                np.array2string(array, max_line_width=np.inf, separator=", ").replace(
-                    "\n", ""
-                ),
-                array.dtype,
-            )
         if array.size <= self.inline_threshold:
-            return "np.array({}, dtype=np.{})".format(
-                np.array2string(array, max_line_width=np.inf, separator=", ").replace(
-                    "\n", ""
-                ),
-                array.dtype,
+            val = np.array2string(array, max_line_width=np.inf, separator=", ").replace(
+                "\n", "").replace("inf", "np.inf").replace("nan", "np.nan")
+            ret = "np.array({}, dtype=np.{})".format(
+                val, array.dtype,
             )
         else:
             name = to_python_name(name)
             np.save(self.storage_dir / "{}.npy".format(name), array)
-            return "np.load(storage/'{}.npy')".format(name)
+            ret = "np.load(storage/'{}.npy')".format(name)
+        if not array.shape:
+            ret += ".reshape([])"
+        return ret
 
     def tensor_to_str(self, tensor):
         array = numpy_helper.to_array(tensor)
