@@ -38,10 +38,15 @@ class CodeGenerator:
 
     def ndarray_to_str(self, array, name):
         if array.size <= self.inline_threshold:
-            val = np.array2string(array, max_line_width=np.inf, separator=", ").replace(
-                "\n", "").replace("inf", "np.inf").replace("nan", "np.nan")
+            val = (
+                np.array2string(array, max_line_width=np.inf, separator=", ")
+                .replace("\n", "")
+                .replace("inf", "np.inf")
+                .replace("nan", "np.nan")
+            )
             ret = "np.array({}, dtype=np.{})".format(
-                val, array.dtype,
+                val,
+                array.dtype,
             )
         else:
             name = to_python_name(name)

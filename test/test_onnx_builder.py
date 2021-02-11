@@ -28,8 +28,8 @@ def test_from_onnx(onnx_file):
 
 
 onnx_runtime_fail_list = [
-# See broken_test in
-# https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/test/onnx/main.cc
+    # See broken_test in
+    # https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/test/onnx/main.cc
     "test_BERT_Squad",
     "test_constantofshape_float_ones",
     "test_constantofshape_int_zeros",
@@ -74,7 +74,7 @@ onnx_runtime_fail_list = [
     "test_sequence_insert_at_back",
     "test_sequence_insert_at_front",
     "test_loop13_seq",
-# Other test gave the not implmented error
+    # Other test gave the not implmented error
     # Min(13)
     "test_min_int8",
     "test_min_uint8",

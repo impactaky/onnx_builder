@@ -13,9 +13,34 @@ def _eval_with_onnxruntime(model, inputs, output_names):
 
 
 class Value:
-    def __init__(self, name, array=None):
+    def __init__(self, name, value=None, shape=None, dtype=None):
         self.name = name
-        self.array = array
+        self.value = value
+        self.shape = shape
+        self.dtype = dtype
+
+    def is_sequence(self):
+        return isinstance(self.value, list) and (
+            len(self.value) == 0 or isinstance(self.value[0], np.ndarray)
+        )
+
+    def value_info(self):
+        if self.is_sequence():
+            return onnx.helper.make_sequence_value_info(
+                self.name,
+                onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(self.dtype)],
+                self.shape,
+            )
+        else:
+            return onnx_builder.util.ndarray_to_value_info(
+                self.value, self.name, self.shape, self.dtype
+            )
+
+    def proto(self):
+        if self.is_sequence():
+            return numpy_helper.from_list(self.value, self.name, self.dtype)
+        else:
+            return numpy_helper.from_array(self.value, name=self.name)
 
 
 class Builder:
@@ -42,70 +67,60 @@ class Builder:
         self.__value_idx += 1
         return self.value_prefix + "_" + str(self.__value_idx)
 
-    def Initializer(self, array, name=""):
-        self.__inputs.append(array)
+    def Initializer(self, value, name=""):
         if not name:
             name = self.__GenValueName()
-        self.__input_vis.append(onnx_builder.util.ndarray_to_value_info(array, name))
-        tensor = numpy_helper.from_array(array, name=name)
-        self.__initializers.append(tensor)
-        return Value(name, array)
+        self.__inputs.append(value)
+        ret = Value(name, value)
+        self.__input_vis.append(ret.value_info())
+        self.__initializers.append(ret.proto())
+        return ret
 
-    def Input(self, array=None, name="", shape=None, dtype=None):
-        if array is not None:
-            self.__inputs.append(array)
+    def Input(self, value=None, name="", shape=None, dtype=None):
         if not name:
             name = self.__GenValueName()
-        self.__input_vis.append(
-            onnx_builder.util.ndarray_to_value_info(
-                array, name, shape=shape, dtype=dtype
-            )
-        )
-        return Value(name, array)
+        ret = Value(name, value, shape=shape, dtype=dtype)
+        if value is not None:
+            self.__inputs.append(ret.value)
+        self.__input_vis.append(ret.value_info())
+        return ret
 
-    def InputSequence(self, list_=None, name="", shape=None, dtype=None):
-        if not name:
-            name = self.__GenValueName()
-        self.__input_vis.append(
-            onnx.helper.make_sequence_value_info(
-                name, onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], shape
-            )
-        )
-        return Value(name, list_)
+    def InputSequence(self, list_=[], name="", shape=None, dtype=None):
+        return self.Input(list_, name, shape, dtype)
 
-    def Output(self, named_array, name="", shape=None, dtype=None):
+    def Output(self, value, name="", shape=None, dtype=None):
         if name:
             for node in self.__nodes:
-                if named_array.name in node.output:
-                    index = list(node.output).index(named_array.name)
+                if value.name in node.output:
+                    index = list(node.output).index(value.name)
                     node.output[index] = name
                     break
-            named_array.name = name
-        if dtype is None:
-            self.__output_vis.append(
-                onnx.helper.make_empty_tensor_value_info(named_array.name)
-            )
-        else:
-            dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
-            self.__output_vis.append(
-                onnx.helper.make_tensor_value_info(named_array.name, dtype, shape)
-            )
-        self.__outputs.append(named_array)
+            value.name = name
+        if shape is not None:
+            if value.shape:
+                assert shape != value.shape
+            value.shape = shape
+        if dtype is not None:
+            if value.dtype:
+                assert dtype != value.dtype
+            value.dtype = dtype
+        self.__output_vis.append(value.value_info())
+        self.__outputs.append(value)
         return self.__outputs[-1]
 
-    def OutputSequence(self, named_array, name="", shape=None, dtype=None):
+    def OutputSequence(self, value, name="", shape=None, dtype=None):
         if name:
             for node in self.__nodes:
-                if named_array.name in node.output:
-                    index = list(node.output).index(named_array.name)
+                if value.name in node.output:
+                    index = list(node.output).index(value.name)
                     node.output[index] = name
                     break
-            named_array.name = name
+            value.name = name
         dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
         self.__output_vis.append(
-            onnx.helper.make_sequence_value_info(named_array.name, dtype, shape)
+            onnx.helper.make_sequence_value_info(value.name, dtype, shape)
         )
-        self.__outputs.append(named_array)
+        self.__outputs.append(value)
         return self.__outputs[-1]
 
     def make_graph(self, name=""):
@@ -133,10 +148,10 @@ class Builder:
         inputs = dict(zip(input_names, self.__inputs))
         output_names = [vi.name for vi in self.__output_vis]
         outputs = self.__eval_func(model, inputs, output_names)
-        for name, array in zip(output_names, outputs):
+        for name, value in zip(output_names, outputs):
             for holder in self.__outputs:
                 if holder.name == name:
-                    holder.array = array
+                    holder.value = value
         return (model, outputs)
 
     def export(self, output_dir, **kwargs):
@@ -149,22 +164,17 @@ class Builder:
         for i, input_ in enumerate(self.__inputs):
             if input_names[i] in initializer_names:
                 continue
-            tmp_pb = numpy_helper.from_array(input_, name=input_names[i])
             with open(
                 output_dir / "test_data_set_0" / "input_{}.pb".format(i), "wb"
             ) as f:
-                f.write(tmp_pb.SerializeToString())
+                f.write(Value(input_names[i], input_).proto().SerializeToString())
         # save outputs
         output_names = [vi.name for vi in self.__output_vis]
         for i, output_ in enumerate(outputs):
-            tmp_pb = numpy_helper.from_array(output_, name=output_names[i])
             with open(
                 output_dir / "test_data_set_0" / "output_{}.pb".format(i), "wb"
             ) as f:
-                f.write(tmp_pb.SerializeToString())
-            self.__output_vis.append(
-                onnx_builder.util.ndarray_to_value_info(output_, output_names[i])
-            )
+                f.write(Value(output_names[i], output_).proto().SerializeToString())
         onnx.save(model, output_dir / "model.onnx")
 
     def __getattr__(self, op):
@@ -174,7 +184,7 @@ class Builder:
             for i, input_ in enumerate(inputs):
                 if type(input_) == Value:
                     input_names.append(input_.name)
-                    inputs[i] = input_.array
+                    inputs[i] = input_.value
                 elif input_ is None:
                     input_names.append("")
                 else:
@@ -209,7 +219,7 @@ class Builder:
                     return outputs
 
             input_vis = [
-                onnx_builder.util.ndarray_to_value_info(a, n)
+                Value(input_names, inputs).value_info()
                 for n, a in zip(input_names, inputs)
             ]
             output_vis = [onnx_builder.util.make_value_info(n) for n in output_names]
