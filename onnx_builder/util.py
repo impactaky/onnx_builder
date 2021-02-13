@@ -10,26 +10,6 @@ def make_value_info(name: str) -> onnx.ValueInfoProto:
     return vi
 
 
-def ndarray_to_value_info(
-    arr: np.ndarray, name: str, shape=None, dtype=None
-) -> onnx.ValueInfoProto:
-    if dtype is None:
-        if isinstance(arr, np.ndarray):
-            dtype = arr.dtype
-    else:
-        dtype = np.dtype(dtype)
-    if shape is None:
-        if isinstance(arr, np.ndarray):
-            shape = arr.shape
-    if shape is None:
-        return onnx.helper.make_empty_tensor_value_info(name)
-    return onnx.helper.make_tensor_value_info(
-        name=name,
-        elem_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[dtype],
-        shape=shape,
-    )
-
-
 def value_info_to_numpy_info(tp: onnx.TensorProto):
     shape = None
     elem_type = np.float32
@@ -68,8 +48,7 @@ def load_inputs_from_test_case(test_case_dir, test_case_name="test_data_set_0"):
     inputs = {}
     for input_pb in input_pbs:
         with open(input_pb, "rb") as f:
-            tensor = onnx.TensorProto()
-            tensor.ParseFromString(f.read())
+            tensor = onnx.load_tensor(f)
         if tensor.name in input_names:
             input_names.remove(tensor.name)
         else:

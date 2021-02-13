@@ -3,6 +3,7 @@ import onnx
 from onnx import numpy_helper
 import numpy as np
 import onnx_builder.util
+from onnx_builder.value import Value
 
 
 def _eval_with_onnxruntime(model, inputs, output_names):
@@ -10,37 +11,6 @@ def _eval_with_onnxruntime(model, inputs, output_names):
 
     session = onnxruntime.InferenceSession(model.SerializeToString())
     return session.run(output_names, inputs)
-
-
-class Value:
-    def __init__(self, name, value=None, shape=None, dtype=None):
-        self.name = name
-        self.value = value
-        self.shape = shape
-        self.dtype = dtype
-
-    def is_sequence(self):
-        return isinstance(self.value, list) and (
-            len(self.value) == 0 or isinstance(self.value[0], np.ndarray)
-        )
-
-    def value_info(self):
-        if self.is_sequence():
-            return onnx.helper.make_sequence_value_info(
-                self.name,
-                onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(self.dtype)],
-                self.shape,
-            )
-        else:
-            return onnx_builder.util.ndarray_to_value_info(
-                self.value, self.name, self.shape, self.dtype
-            )
-
-    def proto(self):
-        if self.is_sequence():
-            return numpy_helper.from_list(self.value, self.name, self.dtype)
-        else:
-            return numpy_helper.from_array(self.value, name=self.name)
 
 
 class Builder:
