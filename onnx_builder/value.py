@@ -27,9 +27,14 @@ def ndarray_to_value_info(
 class Value:
     def __init__(self, name, value=None, shape=None, dtype=None):
         self.name = name
-        self.value = value
         self.shape = shape
         self.dtype = dtype
+        self.value = value
+        if isinstance(value, list) and not self.is_sequence():
+            if type(value[0]) is float: 
+                self.value = np.array(value).astype(np.float32)
+            else:
+                self.value = np.array(value)
 
     def is_sequence(self):
         return isinstance(self.value, list) and (

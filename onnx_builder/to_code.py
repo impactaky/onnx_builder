@@ -52,8 +52,6 @@ class CodeGenerator:
             name = to_python_name(name)
             np.save(self.storage_dir / "{}.npy".format(name), array)
             ret = "np.load(storage/'{}.npy')".format(name)
-        if not array.shape:
-            ret += ".reshape([])"
         return ret
 
     def tensor_to_str(self, tensor):
