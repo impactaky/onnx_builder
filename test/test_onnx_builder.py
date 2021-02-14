@@ -76,10 +76,21 @@ onnx_runtime_fail_list = [
     "test_loop13_seq",
     # Other test gave the not implmented error
     # Min(13)
+    "test_min_int16",
     "test_min_int8",
+    "test_min_uint16",
     "test_min_uint8",
     # Pow(13)
     "test_pow_types_float32_uint32",
+    "test_pow_types_float32_uint64",
+    # Max(13)
+    "test_max_int16",
+    "test_max_int8",
+    "test_max_uint16",
+    "test_max_uint8",
+    # ReduceLogSumExp(13)
+    "test_reduce_log_sum_exp_negative_axes_keepdims_example",
+    "test_reduce_log_sum_exp_negative_axes_keepdims_random",
 ]
 test_cases = onnx_files
 test_cases = [
@@ -107,4 +118,4 @@ def test_from_test_case(test_case):
         try:
             assert np.array_equal(v, v2)
         except:
-            assert np.allclose(v, v2)
+            assert np.allclose(v, v2, atol=1.0e-4, rtol=1.0e-6)
