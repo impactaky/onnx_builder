@@ -69,28 +69,47 @@ class CodeGenerator:
             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                 vi.type.tensor_type
             )
-            return (
-                "",
-                "shape={}, dtype=np.{}, name='{}'".format(
-                    shape,
-                    dtype,
-                    vi.name,
-                ),
+            return "shape={}, dtype=np.{}, name='{}'".format(
+                shape,
+                dtype,
+                vi.name,
             )
         elif vi.type.WhichOneof("value") == "sequence_type":
             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                 vi.type.sequence_type.elem_type.tensor_type
             )
             return (
-                "Sequence",
-                "shape={}, dtype=np.{}, name='{}'".format(
-                    shape,
-                    dtype,
-                    vi.name,
-                ),
+                "shape={}, dtype=np.{}, name='{}', value_type='sequence_type'".format(
+                    shape, dtype, vi.name
+                )
             )
         else:
-            return ("", "name='{}'".format(vi.name))
+            return "name='{}'".format(vi.name)
+
+    def value_to_str(self, value):
+        if type(value) == onnx.TensorProto:
+            return self.tensor_to_str(value)
+        elif type(value) == onnx.GraphProto:
+            graph_name = "subgraph{}".format(self.subgraph_index)
+            self.subgraph_index += 1
+            generator = onnx_builder.CodeGenerator(
+                builder_name=graph_name + "_builder",
+                subgraph_index=self.subgraph_index,
+            )
+            generator.python_file = self.python_file
+            generator.write(
+                "{}_builder = onnx_builder.Builder(value_prefix='{}_tmp')".format(
+                    graph_name, graph_name
+                )
+            )
+            generator.graph_to_code(value)
+            generator.write(
+                "{} = {}_builder.make_graph()".format(graph_name, graph_name)
+            )
+            self.subgraph_index = generator.subgraph_index
+            return graph_name
+        else:
+            return str(value)
 
     def graph_to_code(self, graph, inputs={}):
         self.write("# inputs")
@@ -109,12 +128,11 @@ class CodeGenerator:
                 continue
             if name in initializers:
                 continue
-            (input_type, input_args) = self.value_info_to_code(input_)
+            input_args = self.value_info_to_code(input_)
             self.write(
-                "{} = {}.Input{}({})".format(
+                "{} = {}.Input({})".format(
                     to_python_name(name),
                     self.builder_name,
-                    input_type,
                     input_args,
                 )
             )
@@ -122,14 +140,13 @@ class CodeGenerator:
 
         self.write("# initializers")
         for initializer in graph.initializer:
-            self.python_file.write(
-                "{} = {}.Initializer({}, name='{}')\n".format(
-                    to_python_name(initializer.name),
-                    self.builder_name,
-                    self.tensor_to_str(initializer),
-                    initializer.name,
-                )
+            code = "{} = {}.Initializer({}, name='{}')".format(
+                to_python_name(initializer.name),
+                self.builder_name,
+                self.value_to_str(initializer),
+                initializer.name,
             )
+            self.write(code)
         self.write()
 
         self.write("# nodes")
@@ -146,43 +163,17 @@ class CodeGenerator:
                 if i != 0:
                     attributes += ", "
                 value = onnx.helper.get_attribute_value(attr)
-                if type(value) == onnx.TensorProto:
-                    value = self.tensor_to_str(value)
-                if type(value) == onnx.GraphProto:
-                    graph_name = "subgraph{}".format(self.subgraph_index)
-                    self.subgraph_index += 1
-                    generator = onnx_builder.CodeGenerator(
-                        builder_name=graph_name + "_builder",
-                        subgraph_index=self.subgraph_index,
-                    )
-                    generator.python_file = self.python_file
-                    generator.write(
-                        "{}_builder = onnx_builder.Builder(value_prefix='{}_tmp')".format(
-                            graph_name, graph_name
-                        )
-                    )
-                    generator.graph_to_code(value)
-                    generator.write(
-                        "{} = {}_builder.make_graph()".format(graph_name, graph_name)
-                    )
-                    self.subgraph_index = generator.subgraph_index
-                    value = graph_name
-                attributes += "{}={}".format(attr.name, value)
+                attributes += "{}={}".format(attr.name, self.value_to_str(value))
 
             outputs = [to_python_name(output) for output in node.output]
+            outputs = re.sub(r"[\[\]\']", "", str(outputs))
             input_names += node.output
-            if outputs:
-                outputs = "{}".format(outputs)
-                outputs = re.sub(r"[\[\]\']", "", outputs)
-            else:
-                outputs = ""
             inputs = []
             for input_ in node.input:
                 if input_:
                     inputs.append(to_python_name(input_))
                 else:
                     inputs.append(None)
-
             if inputs:
                 inputs = "{}, ".format(inputs)
                 inputs = re.sub(r"[\[\]\']", "", inputs)
@@ -198,11 +189,10 @@ class CodeGenerator:
 
         self.write("#outputs")
         for output in graph.output:
-            (output_type, output_args) = self.value_info_to_code(output)
+            output_args = self.value_info_to_code(output)
             self.write(
-                "{}.Output{}({}, {})".format(
+                "{}.Output({}, {})".format(
                     self.builder_name,
-                    output_type,
                     to_python_name(output.name),
                     output_args,
                 )

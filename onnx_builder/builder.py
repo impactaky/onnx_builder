@@ -46,7 +46,11 @@ class Builder:
         self.__initializers.append(ret.proto())
         return ret
 
-    def Input(self, value=None, name="", shape=None, dtype=None):
+    def Input(
+        self, value=None, name="", shape=None, dtype=None, value_type="tensor_type"
+    ):
+        if value_type == "sequence_type" and value is None:
+            value = []
         if not name:
             name = self.__GenValueName()
         ret = Value(name, value, shape=shape, dtype=dtype)
@@ -56,9 +60,13 @@ class Builder:
         return ret
 
     def InputSequence(self, list_=[], name="", shape=None, dtype=None):
-        return self.Input(list_, name, shape, dtype)
+        return self.Input(
+            list_, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
+        )
 
-    def Output(self, value, name="", shape=None, dtype=None):
+    def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
+        if value_type == "sequence_type" and value.value is None:
+            value.value = []
         if name:
             for node in self.__nodes:
                 if value.name in node.output:
@@ -79,19 +87,9 @@ class Builder:
         return self.__outputs[-1]
 
     def OutputSequence(self, value, name="", shape=None, dtype=None):
-        if name:
-            for node in self.__nodes:
-                if value.name in node.output:
-                    index = list(node.output).index(value.name)
-                    node.output[index] = name
-                    break
-            value.name = name
-        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
-        self.__output_vis.append(
-            onnx.helper.make_sequence_value_info(value.name, dtype, shape)
+        return self.Output(
+            value, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
-        self.__outputs.append(value)
-        return self.__outputs[-1]
 
     def make_graph(self, name=""):
         if not name:
