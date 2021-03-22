@@ -91,9 +91,22 @@ class Builder:
             value, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
-    def make_graph(self, name=""):
+    def make_graph(self, name="", auto_output=False):
         if not name:
             name = self.__GenValueName()
+        if auto_output:
+            output_names = [vi.name for vi in self.__output_vis]
+            for node in self.__nodes:
+                for output in node.output:
+                    if output in output_names:
+                        continue
+                    user_found = False
+                    for node_ in self.__nodes:
+                        if output in node_.input:
+                            user_found = True
+                            break
+                    if not user_found:
+                        self.Output(Value(output))
         return onnx.helper.make_graph(
             self.__nodes,
             name,
@@ -102,16 +115,15 @@ class Builder:
             initializer=self.__initializers,
         )
 
-    def build(self, graph_name="model.root", **kwargs):
-        graph = self.make_graph(name=graph_name)
+    def build(self, graph_name="model.root", auto_output=False, **kwargs):
+        graph = self.make_graph(name=graph_name, auto_output=auto_output)
         model = onnx.helper.make_model(
             graph, producer_name="onnx_builder", producer_version="0.01", **kwargs
         )
-        # model = onnx.shape_inference.infer_shapes(model)
         return model
 
-    def eval(self, **kwargs):
-        model = self.build(**kwargs)
+    def eval(self, auto_output=False, **kwargs):
+        model = self.build(auto_output=auto_output, **kwargs)
         input_names = [vi.name for vi in self.__input_vis]
         inputs = dict(zip(input_names, self.__inputs))
         output_names = [vi.name for vi in self.__output_vis]
@@ -122,8 +134,8 @@ class Builder:
                     holder.value = value
         return (model, outputs)
 
-    def export(self, output_dir, **kwargs):
-        model, outputs = self.eval(**kwargs)
+    def export(self, output_dir, auto_output=False, **kwargs):
+        model, outputs = self.eval(auto_output=auto_output, **kwargs)
         output_dir = Path(output_dir)
         (output_dir / "test_data_set_0").mkdir(parents=True, exist_ok=True)
         # save inputs
