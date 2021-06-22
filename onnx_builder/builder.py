@@ -174,6 +174,8 @@ class Builder:
             for k, v in kwargs.items():
                 if type(v) == np.ndarray:
                     kwargs[k] = onnx.numpy_helper.from_array(v, self.__GenValueName())
+                if k == "to" and not isinstance(v, int):
+                    kwargs[k] = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(v)]
             node = onnx.helper.make_node(
                 op, inputs=input_names, outputs=output_names, name=name, **kwargs
             )
