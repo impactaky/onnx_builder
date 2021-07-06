@@ -16,12 +16,12 @@ def _eval_with_onnxruntime(model, inputs, output_names):
 class Builder:
     def __init__(
         self,
-        opset_version=None,
+        opset_imports=None,
         eval_each_node=False,
         value_prefix="onnx_builder_tmp",
         eval_func=_eval_with_onnxruntime,
     ):
-        self.opset_version = opset_version
+        self.opset_imports = opset_imports
         self.eval_each_node = eval_each_node
         self.value_prefix = value_prefix
         self.__eval_func = eval_func
@@ -91,6 +91,46 @@ class Builder:
             value, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
+    def Model(self, *args, file_path="", prefix="", **kwargs):
+        if not prefix:
+            prefix = file_path+"_"
+
+        model = onnx.load(file_path)
+        self.opset_imports = getattr(model, "opset_import")
+
+        value_table = {}
+        args_index = 0
+        for input_ in model.graph.input:
+            if input_.name in kwargs:
+                value_table[input_.name] = kwargs[input_.name].name
+            else:
+                value_table[input_.name] = args[args_index].name
+                args_index += 1
+
+        def resolve_value_names(names):
+            for i in range(len(names)):
+                if names[i] in value_table:
+                    names[i] = value_table[names[i]]
+                else:
+                    names[i] = prefix + names[i]
+
+        for node in model.graph.node:
+            if node.name:
+                node.name = prefix + node.name
+            resolve_value_names(node.input)
+            resolve_value_names(node.output)
+            self.__nodes.append(node)
+
+        for initializer in model.graph.initializer:
+            initializer.name = prefix + initializer.name
+            self.__initializers.append(initializer)
+
+        outputs = [Value(prefix + output.name) for output in model.graph.output]
+        if len(outputs) == 1:
+            return outputs[0]
+        else:
+            return outputs
+
     def make_graph(self, name=""):
         if not name:
             name = self.__GenValueName()
@@ -103,6 +143,8 @@ class Builder:
         )
 
     def build(self, graph_name="model.root", **kwargs):
+        if 'opset_imports' not in kwargs or kwargs['opset_imports'] is None:
+            kwargs['opset_imports'] = self.opset_imports
         graph = self.make_graph(name=graph_name)
         model = onnx.helper.make_model(
             graph, producer_name="onnx_builder", producer_version="0.01", **kwargs
@@ -200,10 +242,7 @@ class Builder:
                 outputs=output_vis,
                 initializer=self.__initializers,
             )
-            opset_imports = None
-            if self.opset_version is not None:
-                opset_imports = [onnx.helper.make_operatorsetid("", self.opset_version)]
-            model = onnx.helper.make_model(graph, opset_imports=opset_imports)
+            model = onnx.helper.make_model(graph, opset_imports=self.opset_imports)
 
             inputs = dict(zip(input_names, inputs))
             outputs = self.__eval_func(model, inputs, output_names)
