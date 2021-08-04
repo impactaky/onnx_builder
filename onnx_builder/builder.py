@@ -8,7 +8,6 @@ from onnx_builder.value import Value
 
 def _eval_with_onnxruntime(model, inputs, output_names):
     import onnxruntime
-
     session = onnxruntime.InferenceSession(model.SerializeToString())
     return session.run(output_names, inputs)
 
@@ -100,9 +99,13 @@ class Builder:
 
         value_table = {}
         args_index = 0
+
+        initializer_names = [x.name for x in model.graph.initializer]
         for input_ in model.graph.input:
             if input_.name in kwargs:
                 value_table[input_.name] = kwargs[input_.name].name
+            elif input_.name in initializer_names:
+                pass
             else:
                 value_table[input_.name] = args[args_index].name
                 args_index += 1
