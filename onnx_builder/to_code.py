@@ -41,6 +41,7 @@ class CodeGenerator:
             val = (
                 np.array2string(array, max_line_width=np.inf, separator=", ")
                 .replace("\n", "")
+                .replace("  ", " ")
                 .replace("inf", "np.inf")
                 .replace("nan", "np.nan")
             )
@@ -150,18 +151,18 @@ class CodeGenerator:
         self.write("# nodes")
         input_names = [x.name for x in graph.input]
         for node in graph.node:
-            attributes = ""
+            attributes = []
             if len(node.output) > 1:
-                attributes += "outs={}, ".format(len(node.output))
+                attributes.append("outs={}".format(len(node.output)))
             if node.output:
-                attributes += "output_names={}, ".format(node.output)
+                attributes.append("output_names={}".format(node.output))
             if node.name:
-                attributes += "name='{}', ".format(node.name)
+                attributes.append("name='{}'".format(node.name))
             for i, attr in enumerate(node.attribute):
-                if i != 0:
-                    attributes += ", "
                 value = onnx.helper.get_attribute_value(attr)
-                attributes += "{}={}".format(attr.name, self.value_to_str(value))
+                attributes.append("{}={}".format(attr.name, self.value_to_str(value)))
+
+            attributes_str = ', '.join(attributes) if len(attributes) > 0 else ''
 
             outputs = [to_python_name(output) for output in node.output]
             outputs = re.sub(r"[\[\]\']", "", str(outputs))
@@ -180,7 +181,7 @@ class CodeGenerator:
 
             self.write(
                 "{} = {}.{}({}{})".format(
-                    outputs, self.builder_name, node.op_type, inputs, attributes
+                    outputs, self.builder_name, node.op_type, inputs, attributes_str
                 )
             )
         self.write()
