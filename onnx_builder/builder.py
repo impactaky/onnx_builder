@@ -36,6 +36,9 @@ class Builder:
         self.__value_idx += 1
         return self.value_prefix + "_" + str(self.__value_idx)
 
+    def nodes(self):
+        return self.__nodes
+
     def Initializer(self, value, name=""):
         if not name:
             name = self.__GenValueName()
@@ -62,6 +65,9 @@ class Builder:
         return self.Input(
             list_, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
+
+    def ValueToOutput(self, name):
+        self.__output_vis.append(onnx_builder.util.make_value_info(name))
 
     def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
         if value_type == "sequence_type" and value.value is None:
