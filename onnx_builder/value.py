@@ -43,7 +43,7 @@ class Value:
 
     def value_info(self):
         if self.is_sequence():
-            return onnx.helper.make_sequence_value_info(
+            return onnx.helper.make_tensor_sequence_value_info(
                 self.name,
                 onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(self.dtype)],
                 self.shape,
