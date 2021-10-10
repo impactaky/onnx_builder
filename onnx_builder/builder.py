@@ -25,7 +25,7 @@ class Builder:
         self.value_prefix = value_prefix
         self.__eval_func = eval_func
         self.__value_idx = 0
-        self.__nodes = []
+        self.nodes = []
         self.__output_vis = []
         self.__initializers = []
         self.__outputs = []
@@ -38,8 +38,11 @@ class Builder:
         self.__value_idx += 1
         return self.value_prefix + "_" + str(self.__value_idx)
 
+    def add_value(self, name, value=None):
+        self.values[name] = Value(name, value)
+
     def nodes(self):
-        return self.__nodes
+        return self.nodes
 
     def Initializer(self, value, name=""):
         if not name:
@@ -73,11 +76,14 @@ class Builder:
         if value_type == "sequence_type" and value.value is None:
             value.value = []
         if name:
-            for node in self.__nodes:
+            for node in self.nodes:
                 if value.name in node.output:
                     index = list(node.output).index(value.name)
                     node.output[index] = name
                     break
+            value.name = name
+            self.values[name] = value
+            value = self.values[name]
             value.name = name
         if shape is not None:
             if value.shape:
@@ -87,9 +93,8 @@ class Builder:
             if value.dtype:
                 assert dtype != value.dtype
             value.dtype = dtype
-        self.__output_vis.append(value.value_info())
-        self.__outputs.append(value)
-        return self.__outputs[-1]
+        self.outputs.append(value.name)
+        return value
 
     def OutputSequence(self, value, name="", shape=None, dtype=None):
         return self.Output(
@@ -128,7 +133,7 @@ class Builder:
                 node.name = prefix + node.name
             resolve_value_names(node.input)
             resolve_value_names(node.output)
-            self.__nodes.append(node)
+            self.nodes.append(node)
 
         for initializer in model.graph.initializer:
             initializer.name = prefix + initializer.name
@@ -146,11 +151,12 @@ class Builder:
             name = self.__GenValueName()
         input_vis = [self.values[x].value_info() for x in self.inputs]
         initializers = [self.values[x].proto() for x in self.initializers]
+        output_vis = [self.values[x].value_info() for x in self.outputs]
         return onnx.helper.make_graph(
-            self.__nodes,
+            self.nodes,
             name,
             inputs=input_vis,
-            outputs=self.__output_vis,
+            outputs=output_vis,
             initializer=initializers,
         )
 
@@ -167,12 +173,9 @@ class Builder:
     def eval(self, **kwargs):
         model = self.build(**kwargs)
         inputs = {x: self.values[x].value for x in self.inputs}
-        output_names = [vi.name for vi in self.__output_vis]
-        outputs = self.__eval_func(model, inputs, output_names)
-        for name, value in zip(output_names, outputs):
-            for holder in self.__outputs:
-                if holder.name == name:
-                    holder.value = value
+        outputs = self.__eval_func(model, inputs, self.outputs)
+        for name, value in zip(self.outputs, outputs):
+            self.values[name].value = value
         return (model, outputs)
 
     def export(self, output_dir, **kwargs):
@@ -190,7 +193,7 @@ class Builder:
             ) as f:
                 f.write(self.values[input_].proto().SerializeToString())
         # save outputs
-        output_names = [vi.name for vi in self.__output_vis]
+        output_names = self.outputs
         for i, output_ in enumerate(outputs):
             with open(
                 output_dir / "test_data_set_0" / "output_{}.pb".format(i), "wb"
@@ -213,7 +216,7 @@ class Builder:
                     constant_tensor = numpy_helper.from_array(
                         input_, name=input_names[-1] + "_val"
                     )
-                    self.__nodes.append(
+                    self.nodes.append(
                         onnx.helper.make_node(
                             "Constant",
                             inputs=[],
@@ -221,6 +224,7 @@ class Builder:
                             value=constant_tensor,
                         )
                     )
+                    self.add_value(input_names[-1], constant_tensor)
 
             if not output_names:
                 output_names = [self.__GenValueName() for i in range(outs)]
@@ -232,14 +236,15 @@ class Builder:
             node = onnx.helper.make_node(
                 op, inputs=input_names, outputs=output_names, name=name, **kwargs
             )
-            self.__nodes.append(node)
+            self.nodes.append(node)
+            for name in output_names:
+                self.add_value(name)
 
             if not self.eval_each_node:
-                outputs = [Value(name) for name in output_names]
                 if outs == 1:
-                    return outputs[0]
+                    return self.values[output_names[0]]
                 else:
-                    return outputs
+                    return [self.values[name] for name in output_names]
 
             input_vis = [
                 Value(input_names, inputs).value_info()
