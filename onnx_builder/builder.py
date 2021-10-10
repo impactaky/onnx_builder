@@ -26,11 +26,13 @@ class Builder:
         self.__eval_func = eval_func
         self.__value_idx = 0
         self.__nodes = []
-        self.__input_vis = []
         self.__output_vis = []
         self.__initializers = []
-        self.__inputs = []
         self.__outputs = []
+        self.values = {}
+        self.initializers = []
+        self.inputs = []
+        self.outputs = []
 
     def __GenValueName(self):
         self.__value_idx += 1
@@ -42,11 +44,10 @@ class Builder:
     def Initializer(self, value, name=""):
         if not name:
             name = self.__GenValueName()
-        self.__inputs.append(value)
-        ret = Value(name, value)
-        self.__input_vis.append(ret.value_info())
-        self.__initializers.append(ret.proto())
-        return ret
+        self.values[name] = Value(name, value)
+        self.inputs.append(name)
+        self.initializers.append(name)
+        return self.values[name]
 
     def Input(
         self, value=None, name="", shape=None, dtype=None, value_type="tensor_type"
@@ -55,19 +56,18 @@ class Builder:
             value = []
         if not name:
             name = self.__GenValueName()
-        ret = Value(name, value, shape=shape, dtype=dtype)
-        if value is not None:
-            self.__inputs.append(ret.value)
-        self.__input_vis.append(ret.value_info())
-        return ret
+        self.values[name] = Value(name, value, shape=shape, dtype=dtype)
+        self.inputs.append(name)
+        return self.values[name]
 
     def InputSequence(self, list_=[], name="", shape=None, dtype=None):
         return self.Input(
             list_, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
-    def ValueToOutput(self, name):
-        self.__output_vis.append(onnx_builder.util.make_value_info(name))
+    # FIXME
+    # def ValueToOutput(self, name):
+    #     self.__output_vis.append(onnx_builder.util.make_value_info(name))
 
     def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
         if value_type == "sequence_type" and value.value is None:
@@ -132,7 +132,8 @@ class Builder:
 
         for initializer in model.graph.initializer:
             initializer.name = prefix + initializer.name
-            self.__initializers.append(initializer)
+            # FIXME
+            # self.__initializers.append(initializer)
 
         outputs = [Value(prefix + output.name) for output in model.graph.output]
         if len(outputs) == 1:
@@ -143,12 +144,14 @@ class Builder:
     def make_graph(self, name=""):
         if not name:
             name = self.__GenValueName()
+        input_vis = [self.values[x].value_info() for x in self.inputs]
+        initializers = [self.values[x].proto() for x in self.initializers]
         return onnx.helper.make_graph(
             self.__nodes,
             name,
-            inputs=self.__input_vis,
+            inputs=input_vis,
             outputs=self.__output_vis,
-            initializer=self.__initializers,
+            initializer=initializers,
         )
 
     def build(self, graph_name="model.root", **kwargs):
@@ -163,8 +166,7 @@ class Builder:
 
     def eval(self, **kwargs):
         model = self.build(**kwargs)
-        input_names = [vi.name for vi in self.__input_vis]
-        inputs = dict(zip(input_names, self.__inputs))
+        inputs = {x: self.values[x].value for x in self.inputs}
         output_names = [vi.name for vi in self.__output_vis]
         outputs = self.__eval_func(model, inputs, output_names)
         for name, value in zip(output_names, outputs):
@@ -178,15 +180,15 @@ class Builder:
         output_dir = Path(output_dir)
         (output_dir / "test_data_set_0").mkdir(parents=True, exist_ok=True)
         # save inputs
-        initializer_names = [x.name for x in self.__initializers]
-        input_names = [vi.name for vi in self.__input_vis]
-        for i, input_ in enumerate(self.__inputs):
+        initializer_names = self.initializers
+        input_names = self.inputs
+        for i, input_ in enumerate(self.inputs):
             if input_names[i] in initializer_names:
                 continue
             with open(
                 output_dir / "test_data_set_0" / "input_{}.pb".format(i), "wb"
             ) as f:
-                f.write(Value(input_names[i], input_).proto().SerializeToString())
+                f.write(self.values[input_].proto().SerializeToString())
         # save outputs
         output_names = [vi.name for vi in self.__output_vis]
         for i, output_ in enumerate(outputs):
@@ -244,13 +246,14 @@ class Builder:
                 for n, a in zip(input_names, inputs)
             ]
             output_vis = [onnx_builder.util.make_value_info(n) for n in output_names]
-            graph = onnx.helper.make_graph(
-                [node],
-                "onnx_eval.each_eval",
-                inputs=input_vis,
-                outputs=output_vis,
-                initializer=self.__initializers,
-            )
+            # FIXME
+            # graph = onnx.helper.make_graph(
+            #     [node],
+            #     "onnx_eval.each_eval",
+            #     inputs=input_vis,
+            #     outputs=output_vis,
+            #     initializer=self.__initializers,
+            # )
             model = onnx.helper.make_model(graph, opset_imports=self.opset_imports)
 
             inputs = dict(zip(input_names, inputs))
