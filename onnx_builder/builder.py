@@ -26,9 +26,7 @@ class Builder:
         self.__eval_func = eval_func
         self.__value_idx = 0
         self.nodes = []
-        self.__output_vis = []
         self.__initializers = []
-        self.__outputs = []
         self.values = {}
         self.initializers = []
         self.inputs = []
@@ -68,9 +66,8 @@ class Builder:
             list_, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
-    # FIXME
-    # def ValueToOutput(self, name):
-    #     self.__output_vis.append(onnx_builder.util.make_value_info(name))
+    def ValueToOutput(self, name):
+        self.outputs.append(name)
 
     def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
         if value_type == "sequence_type" and value.value is None:
@@ -137,8 +134,11 @@ class Builder:
 
         for initializer in model.graph.initializer:
             initializer.name = prefix + initializer.name
-            # FIXME
-            # self.__initializers.append(initializer)
+            print('type:', type(initializer))
+            array = numpy_helper.to_array(initializer)
+            print('type:', type(array))
+            self.add_value(initializer.name, array)
+            self.initializers.append(initializer.name)
 
         outputs = [Value(prefix + output.name) for output in model.graph.output]
         if len(outputs) == 1:
