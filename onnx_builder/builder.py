@@ -11,6 +11,23 @@ def _eval_with_onnxruntime(model, inputs, output_names):
     session = onnxruntime.InferenceSession(model.SerializeToString())
     return session.run(output_names, inputs)
 
+def from_test_case(path, onnx_name='model.onnx', test_case_name="test_data_set_0"):
+    path = Path(path)
+    input_values = onnx_builder.util.load_inputs_from_test_case(path, test_case_name)
+    model = onnx.load(path/onnx_name)
+    builder = Builder()
+    inputs = []
+    initializer_names = set(x.name for x in model.graph.initializer)
+    for input_ in model.graph.input:
+        if input_.name not in initializer_names:
+            inputs.append(builder.Input(input_values[input_.name], input_.name))
+    outputs = builder.Model(*inputs, file_path=path/onnx_name, prefix='')
+    if isinstance(outputs, list):
+        for output in outputs:
+            builder.Output(output, output.name)
+    else:
+        builder.Output(outputs, outputs.name)
+    return builder
 
 class Builder:
     def __init__(
@@ -67,7 +84,8 @@ class Builder:
         )
 
     def ValueToOutput(self, name):
-        self.outputs.append(name)
+        if name not in self.outputs:
+            self.outputs.append(name)
 
     def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
         if value_type == "sequence_type" and value.value is None:
@@ -98,8 +116,8 @@ class Builder:
             value, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
-    def Model(self, *args, file_path="", prefix="", **kwargs):
-        if not prefix:
+    def Model(self, *args, file_path="", prefix=None, **kwargs):
+        if prefix is None:
             prefix = file_path+"_"
 
         model = onnx.load(file_path)
@@ -130,13 +148,13 @@ class Builder:
                 node.name = prefix + node.name
             resolve_value_names(node.input)
             resolve_value_names(node.output)
+            for output in node.output:
+                self.add_value(output)
             self.nodes.append(node)
 
         for initializer in model.graph.initializer:
             initializer.name = prefix + initializer.name
-            print('type:', type(initializer))
             array = numpy_helper.to_array(initializer)
-            print('type:', type(array))
             self.add_value(initializer.name, array)
             self.initializers.append(initializer.name)
 
