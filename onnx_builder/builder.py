@@ -220,7 +220,7 @@ class Builder:
         onnx.save(model, output_dir / "model.onnx")
 
     def __getattr__(self, op):
-        def fn(*args, outs=1, output_names=[], name=None, **kwargs):
+        def fn(*args, outs=1, output_names=[], name=None, insert_index=None, **kwargs):
             inputs = list(args)
             input_names = []
             for i, input_ in enumerate(inputs):
@@ -234,14 +234,18 @@ class Builder:
                     constant_tensor = numpy_helper.from_array(
                         input_, name=input_names[-1] + "_val"
                     )
-                    self.nodes.append(
-                        onnx.helper.make_node(
+                    new_node = onnx.helper.make_node(
                             "Constant",
                             inputs=[],
                             outputs=[input_names[-1]],
                             value=constant_tensor,
                         )
-                    )
+                    if insert_index is None:
+                        self.nodes.append(new_node)
+                    else:
+                        self.nodes.insert(insert_index, new_node)
+                        if insert_index >= 0:
+                            insert_index += 1
                     self.add_value(input_names[-1], constant_tensor)
 
             if not output_names:
@@ -254,7 +258,12 @@ class Builder:
             node = onnx.helper.make_node(
                 op, inputs=input_names, outputs=output_names, name=name, **kwargs
             )
-            self.nodes.append(node)
+            if insert_index is None:
+                self.nodes.append(node)
+            else:
+                self.nodes.insert(insert_index, node)
+                if insert_index >= 0:
+                    insert_index += 1
             for name in output_names:
                 self.add_value(name)
 
