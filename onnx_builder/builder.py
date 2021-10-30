@@ -216,6 +216,7 @@ class Builder:
             with open(
                 output_dir / "test_data_set_0" / "output_{}.pb".format(i), "wb"
             ) as f:
+                v = Value(output_names[i], output_)
                 f.write(Value(output_names[i], output_).proto().SerializeToString())
         onnx.save(model, output_dir / "model.onnx")
 
