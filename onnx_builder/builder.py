@@ -53,6 +53,20 @@ class Builder:
         self.__value_idx += 1
         return self.value_prefix + "_" + str(self.__value_idx)
 
+    def rename_value(self, from_, to_):
+        self.inputs = [to_ if x == from_ else x for x in self.inputs]
+        self.outputs = [to_ if x == from_ else x for x in self.outputs]
+        for node in self.nodes:
+            for i, name in enumerate(node.input):
+                if name == from_:
+                    node.input[i] = to_
+            for i, name in enumerate(node.output):
+                if name == from_:
+                    node.output[i] = to_
+        if from_ in self.values:
+            self.values[to_] = self.values[from_]
+            del(self.values[from_])
+
     def add_value(self, name, value=None):
         self.values[name] = Value(name, value)
 
