@@ -13,7 +13,7 @@ def _eval_with_onnxruntime(model, inputs, output_names):
 
 def from_test_case(path, onnx_name='model.onnx', test_case_name="test_data_set_0"):
     path = Path(path)
-    input_values = onnx_builder.util.load_inputs_from_test_case(path, test_case_name)
+    input_values = onnx_builder.util.load_inputs_from_test_case(path, test_case_name, onnx_name=onnx_name)
     model = onnx.load(path/onnx_name)
     builder = Builder()
     inputs = []

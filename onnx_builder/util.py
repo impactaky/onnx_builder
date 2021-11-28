@@ -68,15 +68,15 @@ def load_pbs(pbs, vis):
     return values
 
 
-def load_inputs_from_test_case(test_case_dir, test_case_name="test_data_set_0"):
+def load_inputs_from_test_case(test_case_dir, test_case_name="test_data_set_0", onnx_name="model.onnx"):
     test_case_dir = Path(test_case_dir)
-    model = onnx.load(test_case_dir / "model.onnx")
+    model = onnx.load(test_case_dir / onnx_name)
     input_pbs = glob.glob(str(test_case_dir / test_case_name / "input_*.pb"))
     return load_pbs(input_pbs, model.graph.input)
 
 
-def load_outputs_from_test_case(test_case_dir, test_case_name="test_data_set_0"):
+def load_outputs_from_test_case(test_case_dir, test_case_name="test_data_set_0", onnx_name="model.onnx"):
     test_case_dir = Path(test_case_dir)
-    model = onnx.load(test_case_dir / "model.onnx")
+    model = onnx.load(test_case_dir / onnx_name)
     output_pbs = glob.glob(str(test_case_dir / test_case_name / "output_*.pb"))
     return load_pbs(output_pbs, model.graph.output)
