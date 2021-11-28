@@ -202,10 +202,13 @@ class Builder:
         # model = onnx.shape_inference.infer_shapes(model)
         return model
 
-    def eval(self, **kwargs):
+    def eval(self, eval_func=None, **kwargs):
         model = self.build(**kwargs)
         inputs = {x: self.values[x].value for x in self.inputs}
-        outputs = self.__eval_func(model, inputs, self.outputs)
+        if eval_func is not None:
+            outputs = eval_func(model, inputs, self.outputs)
+        else:
+            outputs = self.__eval_func(model, inputs, self.outputs)
         for name, value in zip(self.outputs, outputs):
             self.values[name].value = value
         return (model, outputs)
