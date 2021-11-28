@@ -11,6 +11,27 @@ def _eval_with_onnxruntime(model, inputs, output_names):
     session = onnxruntime.InferenceSession(model.SerializeToString())
     return session.run(output_names, inputs)
 
+def from_onnx(path):
+    path = Path(path)
+    model = onnx.load(path)
+    builder = Builder()
+    inputs = []
+    initializer_names = set(x.name for x in model.graph.initializer)
+    for input_ in model.graph.input:
+        if input_.name not in initializer_names:
+            if input_.type.WhichOneof("value") == "tensor_type":
+                (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
+                    input_.type.tensor_type
+                )
+            inputs.append(builder.Input(np.zeros(shape, dtype=dtype), input_.name))
+    outputs = builder.Model(*inputs, file_path=path, prefix='')
+    if isinstance(outputs, list):
+        for output in outputs:
+            builder.Output(output, output.name)
+    else:
+        builder.Output(outputs, outputs.name)
+    return builder
+
 def from_test_case(path, onnx_name='model.onnx', test_case_name="test_data_set_0"):
     path = Path(path)
     input_values = onnx_builder.util.load_inputs_from_test_case(path, test_case_name, onnx_name=onnx_name)
