@@ -91,6 +91,15 @@ class Builder:
     def add_value(self, name, value=None):
         self.values[name] = Value(name, value)
 
+    def remove_value(self, name):
+        if name in self.inputs:
+            self.inputs.remove(name)
+        if name in self.outputs:
+            self.outputs.remove(name)
+        if name in self.initializers:
+            self.initializers.remove(name)
+        del(self.values[name])
+
     def nodes(self):
         return self.nodes
 
