@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import onnx
 from onnx import numpy_helper
-from google.protobuf.pyext._message import RepeatedCompositeContainer
+from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 
 import onnx_builder.util
 
@@ -17,7 +17,7 @@ def to_python_name(name):
 
 
 def proto_to_code(obj, indent=0):
-    if isinstance(obj, RepeatedCompositeContainer):
+    if isinstance(obj, RepeatedCompositeFieldContainer):
         ret = " " * indent + "[\n"
         for o in obj:
             ret += proto_to_code(o, indent + 4) + ",\n"
