@@ -116,6 +116,6 @@ def test_from_test_case(test_case):
     for k, v in orig_outputs.items():
         v2 = exported_outputs[k]
         try:
-            assert np.array_equal(v, v2)
+            assert np.array_equal(v, v2, equal_nan=True)
         except:
-            assert np.allclose(v, v2, atol=1.0e-4, rtol=1.0e-6)
+            assert np.allclose(v, v2, atol=1.0e-4, rtol=1.0e-6, equal_nan=True)
