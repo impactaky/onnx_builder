@@ -53,6 +53,7 @@ class CodeGenerator:
             name = to_python_name(name)
             np.save(self.storage_dir / "{}.npy".format(name), array)
             ret = "np.load(storage/'{}.npy')".format(name)
+        ret = ret.replace("np.bool", "np.bool_")
         return ret
 
     def tensor_to_str(self, tensor):
