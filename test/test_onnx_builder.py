@@ -11,7 +11,7 @@ import diff_onnx
 
 import sys
 
-onnx_files = glob.glob("test/onnx/**/model.onnx", recursive=True)
+onnx_files = glob.glob(f"{onnx.__path__[0]}/backend/test/**/model.onnx", recursive=True)
 onnx_files = [f for f in onnx_files if "BFLOAT16" not in f]
 
 
