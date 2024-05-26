@@ -16,6 +16,13 @@ def to_python_name(name):
     return "v_" + re.sub(r"\W", "_", name)
 
 
+def dtype_to_str(dtype):
+    ret = str(dtype)
+    if not isinstance(dtype, np.dtypes.ObjectDType):
+        ret = "np.{}".format(dtype)
+    return ret
+
+
 def proto_to_code(obj, indent=0):
     if isinstance(obj, RepeatedCompositeFieldContainer):
         ret = " " * indent + "[\n"
@@ -45,9 +52,9 @@ class CodeGenerator:
                 .replace("inf", "np.inf")
                 .replace("nan", "np.nan")
             )
-            ret = "np.array({}, dtype=np.{})".format(
+            ret = "np.array({}, dtype={})".format(
                 val,
-                array.dtype,
+                dtype_to_str(array.dtype),
             )
         else:
             name = to_python_name(name)
@@ -69,9 +76,9 @@ class CodeGenerator:
             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                 vi.type.tensor_type
             )
-            return "shape={}, dtype=np.{}, name='{}'".format(
+            return "shape={}, dtype={}, name='{}'".format(
                 shape,
-                dtype,
+                dtype_to_str(dtype),
                 vi.name,
             )
         elif vi.type.WhichOneof("value") == "sequence_type":
@@ -79,8 +86,8 @@ class CodeGenerator:
                 vi.type.sequence_type.elem_type.tensor_type
             )
             return (
-                "shape={}, dtype=np.{}, name='{}', value_type='sequence_type'".format(
-                    shape, dtype, vi.name
+                "shape={}, dtype={}, name='{}', value_type='sequence_type'".format(
+                    shape, dtype_to_str(dtype), vi.name
                 )
             )
         else:
