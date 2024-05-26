@@ -19,6 +19,8 @@ numpy_unsupported_dtypes = [
     "FLOAT8E4M3FNUZ",
     "FLOAT8E5M2",
     "FLOAT8E5M2FNUZ",
+    "e4m3fn",
+    "e5m2",
 ]
 def numpy_unsupported(case_name):
     return any(dtype in case_name for dtype in numpy_unsupported_dtypes)
