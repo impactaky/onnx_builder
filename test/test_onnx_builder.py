@@ -114,6 +114,8 @@ test_cases = [
 
 @pytest.mark.parametrize("test_case", test_cases)
 def test_from_test_case(test_case):
+    if numpy_unsupported(str(test_case)):
+        pytest.skip("Contain numpy unsupporetd dtype")
     test_dir = Path(test_case)
     work_dir = Path("test/from_testcase") / test_case.name
     generator = onnx_builder.CodeGenerator()
