@@ -12,11 +12,23 @@ import diff_onnx
 import sys
 
 onnx_files = glob.glob(f"{onnx.__path__[0]}/backend/test/**/model.onnx", recursive=True)
-onnx_files = [f for f in onnx_files if "BFLOAT16" not in f]
 
+numpy_unsupported_dtypes = [
+    "BFLOAT16",
+    "FLOAT8E4M3FN",
+    "FLOAT8E4M3FNUZ",
+    "FLOAT8E5M2",
+    "FLOAT8E5M2FNUZ",
+    "e4m3fn",
+    "e5m2",
+]
+def numpy_unsupported(case_name):
+    return any(dtype in case_name for dtype in numpy_unsupported_dtypes)
 
 @pytest.mark.parametrize("onnx_file", onnx_files)
 def test_from_onnx(onnx_file):
+    if numpy_unsupported(onnx_file):
+        pytest.skip("Contain numpy unsupporetd dtype")
     onnx_file = Path(onnx_file)
     work_dir = Path("test/from_onnx") / onnx_file.parent.name
     generator = onnx_builder.CodeGenerator()
@@ -102,6 +114,8 @@ test_cases = [
 
 @pytest.mark.parametrize("test_case", test_cases)
 def test_from_test_case(test_case):
+    if numpy_unsupported(str(test_case)):
+        pytest.skip("Contain numpy unsupporetd dtype")
     test_dir = Path(test_case)
     work_dir = Path("test/from_testcase") / test_case.name
     generator = onnx_builder.CodeGenerator()

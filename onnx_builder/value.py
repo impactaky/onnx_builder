@@ -19,7 +19,7 @@ def ndarray_to_value_info(
         return onnx.helper.make_empty_tensor_value_info(name)
     return onnx.helper.make_tensor_value_info(
         name=name,
-        elem_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[dtype],
+        elem_type=onnx.helper.np_dtype_to_tensor_dtype(dtype),
         shape=shape,
     )
 
@@ -48,7 +48,7 @@ class Value:
         if self.is_sequence():
             return onnx.helper.make_tensor_sequence_value_info(
                 self.name,
-                onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(self.dtype)],
+                onnx.helper.np_dtype_to_tensor_dtype(np.dtype(self.dtype)),
                 self.shape,
             )
         else:

@@ -26,7 +26,7 @@ def value_info_to_numpy_info(tp: onnx.TensorProto):
         else:
             shape = []
     if tp.HasField("elem_type"):
-        elem_type = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[getattr(tp, "elem_type")]
+        elem_type = onnx.helper.tensor_dtype_to_np_dtype(getattr(tp, "elem_type"))
         if isinstance(elem_type, np.dtypes.BoolDType):
             elem_type = "bool_"
     return (shape, elem_type)
