@@ -3,7 +3,7 @@ import onnx
 from onnx import numpy_helper
 import numpy as np
 import onnx_builder.util
-from onnx_builder.value import Value
+from onnx_builder.value import Value, OptionalValue
 
 
 def _eval_with_onnxruntime(model, inputs, output_names):
@@ -118,7 +118,11 @@ class Builder:
             value = []
         if not name:
             name = self.__GenValueName()
-        self.values[name] = Value(name, value, shape=shape, dtype=dtype)
+        if value_type == "optional_type":
+            value = OptionalValue(name, value, shape=shape, dtype=dtype)
+        else:
+            value = Value(name, value, shape=shape, dtype=dtype)
+        self.values[name] = value
         self.inputs.append(name)
         return self.values[name]
 
@@ -273,6 +277,9 @@ class Builder:
             input_names = []
             for i, input_ in enumerate(inputs):
                 if type(input_) == Value:
+                    input_names.append(input_.name)
+                    inputs[i] = input_.value
+                elif type(input_) == OptionalValue:
                     input_names.append(input_.name)
                     inputs[i] = input_.value
                 elif input_ is None:
