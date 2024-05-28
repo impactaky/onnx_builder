@@ -90,6 +90,19 @@ class CodeGenerator:
                     shape, dtype_to_str(dtype), vi.name
                 )
             )
+        elif vi.type.WhichOneof("value") == "optional_type":
+            if vi.type.optional_type.HasField("elem_type"):
+                elem_type = vi.type.optional_type.elem_type
+                if elem_type.WhichOneof("value") == "tensor_type":
+                    (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
+                        elem_type.tensor_type
+                    )
+                    return (
+                        "shape={}, dtype={}, name='{}', value_type='optional_type'".format(
+                            shape, dtype_to_str(dtype), vi.name
+                        )
+                    )
+            return "name='{}', value_type='optional_type'".format(vi.name)
         else:
             return "name='{}'".format(vi.name)
 
