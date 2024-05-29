@@ -42,7 +42,7 @@ class CodeGenerator:
         self.inline_threshold = inline_threshold
         self.subgraph_index = subgraph_index
         self.builder_name = builder_name
-
+    
     def ndarray_to_str(self, array, name):
         if array.size <= self.inline_threshold:
             val = (
@@ -70,6 +70,14 @@ class CodeGenerator:
 
     def write(self, line=""):
         self.python_file.write(" " * self.base_indent + str(line) + "\n")
+    
+    def value_info_to_prefix(self, vi):
+        if vi.type.WhichOneof("value") == "sequence_type":
+            return ""
+        elif vi.type.WhichOneof("value") == "optional_type":
+            return "Optional"
+        else:
+            return ""
 
     def value_info_to_code(self, vi):
         if vi.type.WhichOneof("value") == "tensor_type":
@@ -98,7 +106,16 @@ class CodeGenerator:
                         elem_type.tensor_type
                     )
                     return (
-                        "shape={}, dtype={}, name='{}', value_type='optional_type'".format(
+                        "shape={}, dtype={}, name='{}'".format(
+                            shape, dtype_to_str(dtype), vi.name
+                        )
+                    )
+                elif elem_type.WhichOneof("value") == "sequence_type":
+                    (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
+                        elem_type.sequence_type.elem_type.tensor_type
+                    )
+                    return (
+                        "shape={}, dtype={}, name='{}', value_type='sequence_type'".format(
                             shape, dtype_to_str(dtype), vi.name
                         )
                     )
@@ -138,9 +155,10 @@ class CodeGenerator:
             name = input_.name
             if name in inputs:
                 self.write(
-                    "{} = {}.Input({}, name='{}')".format(
+                    "{} = {}.{}Input({}, name='{}')".format(
                         to_python_name(name),
                         self.builder_name,
+                        self.value_info_to_prefix(input_),
                         self.ndarray_to_str(inputs[name], name),
                         name,
                     )
@@ -150,9 +168,10 @@ class CodeGenerator:
                 continue
             input_args = self.value_info_to_code(input_)
             self.write(
-                "{} = {}.Input({})".format(
+                "{} = {}.{}Input({})".format(
                     to_python_name(name),
                     self.builder_name,
+                    self.value_info_to_prefix(input_),
                     input_args,
                 )
             )
@@ -211,8 +230,9 @@ class CodeGenerator:
         for output in graph.output:
             output_args = self.value_info_to_code(output)
             self.write(
-                "{}.Output({}, {})".format(
+                "{}.{}Output({}, {})".format(
                     self.builder_name,
+                    self.value_info_to_prefix(output),
                     to_python_name(output.name),
                     output_args,
                 )
