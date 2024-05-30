@@ -8,6 +8,7 @@ from onnx import numpy_helper
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 
 import onnx_builder.util
+from .type import SequenceTensorType
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf)
 
@@ -145,6 +146,11 @@ class CodeGenerator:
             )
             self.subgraph_index = generator.subgraph_index
             return graph_name
+        elif type(value) == onnx.TypeProto:
+            if value.WhichOneof("value") == "sequence_type":
+                return SequenceTensorType.from_proto(value.sequence_type).to_code()
+            else:
+                return str(value)
         else:
             return str(value)
 

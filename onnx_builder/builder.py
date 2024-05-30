@@ -4,7 +4,7 @@ from onnx import numpy_helper
 import numpy as np
 import onnx_builder.util
 from onnx_builder.value import Value, OptionalValue
-
+from .type import SequenceTensorType
 
 def _eval_with_onnxruntime(model, inputs, output_names):
     import onnxruntime
@@ -347,6 +347,8 @@ class Builder:
                     kwargs[k] = onnx.numpy_helper.from_array(v, self.__GenValueName())
                 if k == "to" and not isinstance(v, int):
                     kwargs[k] = onnx.helper.np_dtype_to_tensor_dtype(np.dtype(v))
+                if isinstance(v, SequenceTensorType):
+                    kwargs[k] = v.to_proto()
             node = onnx.helper.make_node(
                 op, inputs=input_names, outputs=output_names, name=name, **kwargs
             )
