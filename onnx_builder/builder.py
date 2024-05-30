@@ -126,6 +126,18 @@ class Builder:
         self.inputs.append(name)
         return self.values[name]
 
+    def OptionalInput(
+        self, value=None, name="", shape=None, dtype=None, value_type="tensor_type"
+    ):
+        if value_type == "sequence_type" and value is None:
+            value = []
+        if not name:
+            name = self.__GenValueName()
+        value = OptionalValue(name, value, shape=shape, dtype=dtype)
+        self.values[name] = value
+        self.inputs.append(name)
+        return self.values[name]
+
     def InputSequence(self, list_=[], name="", shape=None, dtype=None):
         return self.Input(
             list_, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
@@ -136,6 +148,31 @@ class Builder:
             self.outputs.append(name)
 
     def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
+        if value_type == "sequence_type" and value.value is None:
+            value.value = []
+        if name:
+            for node in self.nodes:
+                if value.name in node.output:
+                    index = list(node.output).index(value.name)
+                    node.output[index] = name
+                    break
+            value.name = name
+            self.values[name] = value
+            value = self.values[name]
+            value.name = name
+        if shape is not None:
+            if value.shape:
+                assert shape != value.shape
+            value.shape = shape
+        if dtype is not None:
+            if value.dtype:
+                assert dtype != value.dtype
+            value.dtype = dtype
+        self.outputs.append(value.name)
+        return value
+
+    def OptionalOutput(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
+        value.is_optional = True
         if value_type == "sequence_type" and value.value is None:
             value.value = []
         if name:
