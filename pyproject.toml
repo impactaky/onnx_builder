@@ -13,6 +13,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "mypy",
+    "nptyping",
     "pre-commit",
     "pytest",
     "pytest-parallel",
@@ -24,3 +26,13 @@ Repository = "https://github.com/impactaly/onnx_builder"
 
 [tool.ruff]
 exclude = ["test/from_onnx", "test/from_testcase"]
+
+[tool.mypy]
+plugins = [
+  "numpy.typing.mypy_plugin",
+]
+
+warn_redundant_casts=true
+warn_unreachable=true
+warn_unused_ignores=true
+warn_return_any=true

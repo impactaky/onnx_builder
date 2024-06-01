@@ -108,7 +108,7 @@ onnx_runtime_fail_list = [
 ]
 test_cases = onnx_files
 test_cases = [
-    Path(f).parent
+    str(Path(f).parent)
     for f in test_cases
     if Path(f).parent.name not in onnx_runtime_fail_list
 ]

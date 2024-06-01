@@ -1,4 +1,5 @@
 import re
+import sys
 import shutil
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 import onnx_builder.util
 from .type import SequenceTensorType
 
-np.set_printoptions(linewidth=np.inf, threshold=np.inf)
+np.set_printoptions(linewidth=sys.maxsize, threshold=sys.maxsize)
 
 
 def to_python_name(name):
@@ -19,7 +20,9 @@ def to_python_name(name):
 
 def dtype_to_str(dtype):
     ret = str(dtype)
-    if not isinstance(dtype, np.dtypes.ObjectDType):
+    if isinstance(dtype, np.dtypes.BoolDType):
+        ret = "np.bool_"
+    elif not isinstance(dtype, np.dtypes.ObjectDType):
         ret = "np.{}".format(dtype)
     return ret
 
@@ -61,7 +64,6 @@ class CodeGenerator:
             name = to_python_name(name)
             np.save(self.storage_dir / "{}.npy".format(name), array)
             ret = "np.load(storage/'{}.npy')".format(name)
-        ret = ret.replace("np.bool", "np.bool_")
         return ret
 
     def tensor_to_str(self, tensor):
