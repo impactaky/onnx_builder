@@ -12,10 +12,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = [
+dev = [
+    "pre-commit",
     "pytest",
-    "pytest-parallel"
+    "pytest-parallel",
+    "ruff"
 ]
 
 [project.urls]
 Repository = "https://github.com/impactaly/onnx_builder"
+
+[tool.ruff]
+exclude = ["test/from_onnx", "test/from_testcase"]

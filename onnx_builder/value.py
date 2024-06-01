@@ -1,9 +1,9 @@
 import onnx
 from onnx import numpy_helper
-import onnx_builder.util
 import numpy as np
 
-from typing import (List, Optional, Sequence, Union)
+from typing import List, Optional, Sequence, Union
+
 
 def make_tensor_optional_value_info(
     name: str,
@@ -18,11 +18,14 @@ def make_tensor_optional_value_info(
     if doc_string:
         value_info_proto.doc_string = doc_string
 
-    tensor_type_proto = onnx.helper.make_tensor_type_proto(elem_type, shape, elem_shape_denotation)
+    tensor_type_proto = onnx.helper.make_tensor_type_proto(
+        elem_type, shape, elem_shape_denotation
+    )
     optional_type_proto = onnx.helper.make_optional_type_proto(tensor_type_proto)
     value_info_proto.type.optional_type.CopyFrom(optional_type_proto.optional_type)
 
     return value_info_proto
+
 
 def make_tensor_sequence_optional_value_info(
     name: str,
@@ -37,12 +40,15 @@ def make_tensor_sequence_optional_value_info(
     if doc_string:
         value_info_proto.doc_string = doc_string
 
-    tensor_type_proto = onnx.helper.make_tensor_type_proto(elem_type, shape, elem_shape_denotation)
+    tensor_type_proto = onnx.helper.make_tensor_type_proto(
+        elem_type, shape, elem_shape_denotation
+    )
     sequence_type_proto = onnx.helper.make_sequence_type_proto(tensor_type_proto)
     optional_type_proto = onnx.helper.make_optional_type_proto(sequence_type_proto)
     value_info_proto.type.optional_type.CopyFrom(optional_type_proto.optional_type)
 
     return value_info_proto
+
 
 def ndarray_to_value_info(
     arr: np.ndarray, name: str, shape=None, dtype=None
@@ -75,7 +81,7 @@ class Value:
         self.shape = shape
         self.dtype = dtype
         if isinstance(value, list) and not self.is_sequence():
-            if type(value[0]) is float: 
+            if isinstance(value[0], float):
                 self.value = np.array(value).astype(np.float32)
             else:
                 self.value = np.array(value)
@@ -113,6 +119,7 @@ class Value:
             return numpy_helper.from_list(self.value, self.name, self.dtype)
         else:
             return numpy_helper.from_array(self.value, name=self.name)
+
 
 class OptionalValue(Value):
     def __init__(self, name, value=None, shape=None, dtype=None):

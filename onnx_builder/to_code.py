@@ -43,7 +43,7 @@ class CodeGenerator:
         self.inline_threshold = inline_threshold
         self.subgraph_index = subgraph_index
         self.builder_name = builder_name
-    
+
     def ndarray_to_str(self, array, name):
         if array.size <= self.inline_threshold:
             val = (
@@ -71,7 +71,7 @@ class CodeGenerator:
 
     def write(self, line=""):
         self.python_file.write(" " * self.base_indent + str(line) + "\n")
-    
+
     def value_info_to_prefix(self, vi):
         if vi.type.WhichOneof("value") == "sequence_type":
             return ""
@@ -94,10 +94,8 @@ class CodeGenerator:
             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                 vi.type.sequence_type.elem_type.tensor_type
             )
-            return (
-                "shape={}, dtype={}, name='{}', value_type='sequence_type'".format(
-                    shape, dtype_to_str(dtype), vi.name
-                )
+            return "shape={}, dtype={}, name='{}', value_type='sequence_type'".format(
+                shape, dtype_to_str(dtype), vi.name
             )
         elif vi.type.WhichOneof("value") == "optional_type":
             if vi.type.optional_type.HasField("elem_type"):
@@ -106,19 +104,15 @@ class CodeGenerator:
                     (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                         elem_type.tensor_type
                     )
-                    return (
-                        "shape={}, dtype={}, name='{}'".format(
-                            shape, dtype_to_str(dtype), vi.name
-                        )
+                    return "shape={}, dtype={}, name='{}'".format(
+                        shape, dtype_to_str(dtype), vi.name
                     )
                 elif elem_type.WhichOneof("value") == "sequence_type":
                     (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                         elem_type.sequence_type.elem_type.tensor_type
                     )
-                    return (
-                        "shape={}, dtype={}, name='{}', value_type='sequence_type'".format(
-                            shape, dtype_to_str(dtype), vi.name
-                        )
+                    return "shape={}, dtype={}, name='{}', value_type='sequence_type'".format(
+                        shape, dtype_to_str(dtype), vi.name
                     )
             return "name='{}', value_type='optional_type'".format(vi.name)
         else:
@@ -208,7 +202,7 @@ class CodeGenerator:
                 value = onnx.helper.get_attribute_value(attr)
                 attributes.append("{}={}".format(attr.name, self.value_to_str(value)))
 
-            attributes_str = ', '.join(attributes) if len(attributes) > 0 else ''
+            attributes_str = ", ".join(attributes) if len(attributes) > 0 else ""
 
             outputs = [to_python_name(output) for output in node.output]
             outputs = re.sub(r"[\[\]\']", "", str(outputs))
