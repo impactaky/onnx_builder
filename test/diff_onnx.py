@@ -1,7 +1,7 @@
 import onnx
 
 
-def diff_onnx(expect_onnx, actual_onnx):
+def diff_onnx(expect_onnx: str, actual_onnx: str):
     expect = onnx.load(expect_onnx)
     actual = onnx.load(actual_onnx)
 

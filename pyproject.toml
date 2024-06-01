@@ -31,7 +31,7 @@ exclude = ["test/from_onnx", "test/from_testcase"]
 plugins = [
   "numpy.typing.mypy_plugin",
 ]
-
+disallow_untyped_calls=true
 warn_redundant_casts=true
 warn_unreachable=true
 warn_unused_ignores=true
