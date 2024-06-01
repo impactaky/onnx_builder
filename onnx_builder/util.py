@@ -12,7 +12,7 @@ def make_value_info(name: str) -> onnx.ValueInfoProto:
 
 def value_info_to_numpy_info(tp: onnx.TensorProto):
     shape = None
-    elem_type = np.float32
+    elem_type: np.typing.DTypeLike = np.float32
     if tp.HasField("shape"):
         if len(tp.shape.dim):
 
@@ -24,11 +24,9 @@ def value_info_to_numpy_info(tp: onnx.TensorProto):
 
             shape = tuple(map(dim_to_val, tp.shape.dim))
         else:
-            shape = []
+            shape = ()
     if tp.HasField("elem_type"):
         elem_type = onnx.helper.tensor_dtype_to_np_dtype(getattr(tp, "elem_type"))
-        if isinstance(elem_type, np.dtypes.BoolDType):
-            elem_type = "bool_"
     return (shape, elem_type)
 
 
