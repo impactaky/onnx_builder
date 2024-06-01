@@ -1,0 +1,21 @@
+[project]
+name = "onnx-builder"
+version = "0.3.0"
+description = "Utilities for creating and editing ONNX"
+authors = [{name="impactaly", email="impactaky@users.noreply.github.com"}]
+license = {text = "Apache-2.0"}
+readme = "README.md"
+dependencies = [
+    "numpy",
+    "onnx==1.15.0",
+    "onnxruntime"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-parallel"
+]
+
+[project.urls]
+Repository = "https://github.com/impactaly/onnx_builder"
