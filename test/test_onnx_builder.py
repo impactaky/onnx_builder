@@ -3,7 +3,6 @@ from pathlib import Path
 
 import numpy as np
 import onnx
-import onnxruntime
 import pytest
 
 import onnx_builder
@@ -22,8 +21,11 @@ numpy_unsupported_dtypes = [
     "e4m3fn",
     "e5m2",
 ]
+
+
 def numpy_unsupported(case_name):
     return any(dtype in case_name for dtype in numpy_unsupported_dtypes)
+
 
 @pytest.mark.parametrize("onnx_file", onnx_files)
 def test_from_onnx(onnx_file):
@@ -131,5 +133,5 @@ def test_from_test_case(test_case):
         v2 = exported_outputs[k]
         try:
             assert np.array_equal(v, v2, equal_nan=True)
-        except:
+        except AssertionError:
             assert np.allclose(v, v2, atol=1.0e-4, rtol=1.0e-6, equal_nan=True)

@@ -1,7 +1,8 @@
 import onnx
 import numpy as np
 
-class SequenceTensorType():
+
+class SequenceTensorType:
     def __init__(self, dim, dtype):
         self.dim = dim
         self.dtype = dtype
@@ -10,7 +11,9 @@ class SequenceTensorType():
     def from_proto(cls, proto: onnx.SequenceProto):
         if proto.elem_type.WhichOneof("value") == "tensor_type":
             dim = proto.elem_type.tensor_type.shape.dim[0].dim_value
-            dtype = onnx.helper.tensor_dtype_to_np_dtype(proto.elem_type.tensor_type.elem_type)
+            dtype = onnx.helper.tensor_dtype_to_np_dtype(
+                proto.elem_type.tensor_type.elem_type
+            )
             return cls(dim, dtype)
         else:
             raise ValueError("Only tensor type is supported")
