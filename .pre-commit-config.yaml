@@ -1,0 +1,21 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0  # Use the ref you want to point at
+    hooks:
+    -   id: check-added-large-files
+        args:
+        - --enforce-all
+    -   id: check-case-conflict
+    -   id: check-executables-have-shebangs
+    -   id: check-merge-conflict
+    -   id: check-shebang-scripts-are-executable
+    -   id: check-symlinks
+    -   id: destroyed-symlinks
+    -   id: mixed-line-ending
+    -   id: no-commit-to-branch
+    -   id: requirements-txt-fixer
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.7
+    hooks:
+    -   id: ruff
+    -   id: ruff-format
