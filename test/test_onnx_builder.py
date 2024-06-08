@@ -18,27 +18,29 @@ numpy_unsupported_dtypes = [
     "FLOAT8E4M3FNUZ",
     "FLOAT8E5M2",
     "FLOAT8E5M2FNUZ",
+    "INT4",
     "e4m3fn",
     "e5m2",
+    "int4",
 ]
 
 
-def numpy_unsupported(case_name):
+def numpy_unsupported(case_name: str) -> bool:
     return any(dtype in case_name for dtype in numpy_unsupported_dtypes)
 
 
 @pytest.mark.parametrize("onnx_file", onnx_files)
-def test_from_onnx(onnx_file):
+def test_from_onnx(onnx_file: str) -> None:
     if numpy_unsupported(onnx_file):
         pytest.skip("Contain numpy unsupporetd dtype")
-    onnx_file = Path(onnx_file)
-    work_dir = Path("test/from_onnx") / onnx_file.parent.name
+    onnx_path = Path(onnx_file)
+    work_dir = Path("test/from_onnx") / onnx_path.parent.name
     generator = onnx_builder.CodeGenerator()
-    generator.generate(onnx_file, work_dir)
+    generator.generate(onnx_path, work_dir)
     exec(
         open(work_dir / "exporter.py").read(), {"sys.path": sys.path + [str(work_dir)]}
     )
-    diff_onnx.diff_onnx(onnx_file, work_dir / "exported" / "model.onnx")
+    diff_onnx.diff_onnx(onnx_path, work_dir / "exported" / "model.onnx")
 
 
 onnx_runtime_fail_list = [
