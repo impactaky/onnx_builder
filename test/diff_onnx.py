@@ -1,7 +1,8 @@
+from pathlib import Path
 import onnx
 
 
-def diff_onnx(expect_onnx: str, actual_onnx: str):
+def diff_onnx(expect_onnx: Path | str, actual_onnx: Path | str) -> None:
     expect = onnx.load(expect_onnx)
     actual = onnx.load(actual_onnx)
 

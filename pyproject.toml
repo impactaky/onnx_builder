@@ -18,7 +18,8 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-parallel",
-    "ruff"
+    "ruff",
+    "types-protobuf"
 ]
 
 [project.urls]
