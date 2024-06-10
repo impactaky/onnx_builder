@@ -2,87 +2,53 @@ from pathlib import Path
 import onnx
 from onnx import numpy_helper
 import numpy as np
-import onnx_builder.util
-from onnx_builder.value import Value, OptionalValue
+import numpy.typing as npt
+from onnx_builder.value import Value, OptionalValue, ValueType, ValueContentType
 from .type import SequenceTensorType
+from typing import Callable, Any
+from google.protobuf.internal.containers import RepeatedScalarFieldContainer
 
 
-def _eval_with_onnxruntime(model, inputs, output_names):
+ModelEvalFuncType = Callable[
+    [onnx.ModelProto, dict[str, ValueContentType], list[str]], list[npt.NDArray]
+]
+
+
+def _eval_with_onnxruntime(
+    model: onnx.ModelProto, inputs: dict[str, ValueContentType], output_names: list[str]
+) -> list[npt.NDArray]:
     import onnxruntime
 
     session = onnxruntime.InferenceSession(model.SerializeToString())
-    return session.run(output_names, inputs)
-
-
-def from_onnx(path):
-    path = Path(path)
-    model = onnx.load(path)
-    builder = Builder()
-    inputs = []
-    initializer_names = set(x.name for x in model.graph.initializer)
-    for input_ in model.graph.input:
-        if input_.name not in initializer_names:
-            if input_.type.WhichOneof("value") == "tensor_type":
-                (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
-                    input_.type.tensor_type
-                )
-            inputs.append(builder.Input(np.zeros(shape, dtype=dtype), input_.name))
-    outputs = builder.Model(*inputs, file_path=path, prefix="")
-    if isinstance(outputs, list):
-        for output in outputs:
-            builder.Output(output, output.name)
-    else:
-        builder.Output(outputs, outputs.name)
-    return builder
-
-
-def from_test_case(path, onnx_name="model.onnx", test_case_name="test_data_set_0"):
-    path = Path(path)
-    input_values = onnx_builder.util.load_inputs_from_test_case(
-        path, test_case_name, onnx_name=onnx_name
-    )
-    model = onnx.load(path / onnx_name)
-    builder = Builder()
-    inputs = []
-    initializer_names = set(x.name for x in model.graph.initializer)
-    for input_ in model.graph.input:
-        if input_.name not in initializer_names:
-            inputs.append(builder.Input(input_values[input_.name], input_.name))
-    outputs = builder.Model(*inputs, file_path=path / onnx_name, prefix="")
-    if isinstance(outputs, list):
-        for output in outputs:
-            builder.Output(output, output.name)
-    else:
-        builder.Output(outputs, outputs.name)
-    return builder
+    ret: list[npt.NDArray] = session.run(output_names, inputs)
+    return ret
 
 
 class Builder:
     def __init__(
         self,
-        opset_imports=None,
-        value_prefix="onnx_builder_tmp",
-        eval_func=_eval_with_onnxruntime,
+        opset_imports: int | None = None,
+        value_prefix: str = "onnx_builder_tmp",
+        eval_func: ModelEvalFuncType = _eval_with_onnxruntime,
     ):
         self.opset_imports = opset_imports
         self.value_prefix = value_prefix
         self.__eval_func = eval_func
         self.__value_idx = 0
-        self.nodes = []
-        self.__initializers = []
-        self.values = {}
-        self.initializers = []
-        self.inputs = []
-        self.outputs = []
+        self.__nodes: list[onnx.NodeProto] = []
+        self.values: dict[str, ValueType] = {}
+        self.initializers: list[str] = []
+        self.inputs: list[str] = []
+        self.outputs: list[str] = []
 
-    def __GenValueName(self):
+    def __GenValueName(self) -> str:
         self.__value_idx += 1
         return self.value_prefix + "_" + str(self.__value_idx)
 
-    def rename_value(self, from_, to_):
+    def rename_value(self, from_: str, to_: str) -> None:
         self.inputs = [to_ if x == from_ else x for x in self.inputs]
         self.outputs = [to_ if x == from_ else x for x in self.outputs]
-        for node in self.nodes:
+        for node in self.__nodes:
             for i, name in enumerate(node.input):
                 if name == from_:
                     node.input[i] = to_
@@ -93,10 +59,10 @@ class Builder:
             self.values[to_] = self.values[from_]
             del self.values[from_]
 
-    def add_value(self, name, value=None):
+    def add_value(self, name: str, value: npt.NDArray | None = None) -> None:
         self.values[name] = Value(name, value)
 
-    def remove_value(self, name):
+    def remove_value(self, name: str) -> None:
         if name in self.inputs:
             self.inputs.remove(name)
         if name in self.outputs:
@@ -105,10 +71,10 @@ class Builder:
             self.initializers.remove(name)
         del self.values[name]
 
-    def nodes(self):
-        return self.nodes
+    def nodes(self) -> list[onnx.NodeProto]:
+        return self.__nodes
 
-    def Initializer(self, value, name=""):
+    def Initializer(self, value: ValueContentType, name: str = "") -> ValueType:
         if not name:
             name = self.__GenValueName()
         self.values[name] = Value(name, value)
@@ -117,46 +83,67 @@ class Builder:
         return self.values[name]
 
     def Input(
-        self, value=None, name="", shape=None, dtype=None, value_type="tensor_type"
-    ):
+        self,
+        value: ValueContentType | None = None,
+        name: str = "",
+        shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
+        value_type: str = "tensor_type",
+    ) -> ValueType:
         if value_type == "sequence_type" and value is None:
             value = []
         if not name:
             name = self.__GenValueName()
         if value_type == "optional_type":
-            value = OptionalValue(name, value, shape=shape, dtype=dtype)
+            self.values[name] = OptionalValue(name, value, shape=shape, dtype=dtype)
         else:
-            value = Value(name, value, shape=shape, dtype=dtype)
-        self.values[name] = value
+            self.values[name] = Value(name, value, shape=shape, dtype=dtype)
         self.inputs.append(name)
         return self.values[name]
 
     def OptionalInput(
-        self, value=None, name="", shape=None, dtype=None, value_type="tensor_type"
-    ):
+        self,
+        value: ValueContentType | None = None,
+        name: str = "",
+        shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
+        value_type: str = "tensor_type",
+    ) -> ValueType:
         if value_type == "sequence_type" and value is None:
             value = []
         if not name:
             name = self.__GenValueName()
-        value = OptionalValue(name, value, shape=shape, dtype=dtype)
-        self.values[name] = value
+        self.values[name] = OptionalValue(name, value, shape=shape, dtype=dtype)
         self.inputs.append(name)
         return self.values[name]
 
-    def InputSequence(self, list_=[], name="", shape=None, dtype=None):
+    def InputSequence(
+        self,
+        list_: list[npt.NDArray] = [],
+        name: str = "",
+        shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
+    ) -> ValueType:
         return self.Input(
             list_, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
-    def ValueToOutput(self, name):
+    def ValueToOutput(self, name: str) -> None:
         if name not in self.outputs:
             self.outputs.append(name)
 
-    def Output(self, value, name="", shape=None, dtype=None, value_type="tensor_type"):
+    def Output(
+        self,
+        value: ValueType,
+        name: str = "",
+        shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
+        value_type: str = "tensor_type",
+    ) -> ValueType:
         if value_type == "sequence_type" and value.value is None:
             value.value = []
         if name:
-            for node in self.nodes:
+            for node in self.__nodes:
                 if value.name in node.output:
                     index = list(node.output).index(value.name)
                     node.output[index] = name
@@ -177,13 +164,18 @@ class Builder:
         return value
 
     def OptionalOutput(
-        self, value, name="", shape=None, dtype=None, value_type="tensor_type"
-    ):
+        self,
+        value: ValueType,
+        name: str = "",
+        shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
+        value_type: str = "tensor_type",
+    ) -> ValueType:
         value.is_optional = True
         if value_type == "sequence_type" and value.value is None:
             value.value = []
         if name:
-            for node in self.nodes:
+            for node in self.__nodes:
                 if value.name in node.output:
                     index = list(node.output).index(value.name)
                     node.output[index] = name
@@ -203,12 +195,24 @@ class Builder:
         self.outputs.append(value.name)
         return value
 
-    def OutputSequence(self, value, name="", shape=None, dtype=None):
+    def OutputSequence(
+        self,
+        value: ValueType,
+        name: str = "",
+        shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
+    ) -> ValueType:
         return self.Output(
             value, name=name, shape=shape, dtype=dtype, value_type="sequence_type"
         )
 
-    def Model(self, *args, file_path="", prefix=None, **kwargs):
+    def Model(
+        self,
+        *args: ValueType,
+        file_path: str = "",
+        prefix: str | None = None,
+        **kwargs: ValueType,
+    ) -> ValueType | list[ValueType]:
         if prefix is None:
             prefix = file_path + "_"
 
@@ -228,7 +232,7 @@ class Builder:
                 value_table[input_.name] = args[args_index].name
                 args_index += 1
 
-        def resolve_value_names(names):
+        def resolve_value_names(names: RepeatedScalarFieldContainer[str]) -> None:
             for i in range(len(names)):
                 if names[i] in value_table:
                     names[i] = value_table[names[i]]
@@ -242,7 +246,7 @@ class Builder:
             resolve_value_names(node.output)
             for output in node.output:
                 self.add_value(output)
-            self.nodes.append(node)
+            self.__nodes.append(node)
 
         for initializer in model.graph.initializer:
             initializer.name = prefix + initializer.name
@@ -256,21 +260,21 @@ class Builder:
         else:
             return outputs
 
-    def make_graph(self, name=""):
+    def make_graph(self, name: str = "") -> onnx.GraphProto:
         if not name:
             name = self.__GenValueName()
         input_vis = [self.values[x].value_info() for x in self.inputs]
-        initializers = [self.values[x].proto() for x in self.initializers]
+        initializers = [self.values[x].tensorProto() for x in self.initializers]
         output_vis = [self.values[x].value_info() for x in self.outputs]
         return onnx.helper.make_graph(
-            self.nodes,
+            self.__nodes,
             name,
             inputs=input_vis,
             outputs=output_vis,
             initializer=initializers,
         )
 
-    def build(self, graph_name="model.root", **kwargs):
+    def build(self, graph_name: str = "model.root", **kwargs: Any) -> onnx.ModelProto:
         if "opset_imports" not in kwargs or kwargs["opset_imports"] is None:
             kwargs["opset_imports"] = self.opset_imports
         graph = self.make_graph(name=graph_name)
@@ -280,7 +284,9 @@ class Builder:
         # model = onnx.shape_inference.infer_shapes(model)
         return model
 
-    def eval(self, eval_func=None, **kwargs):
+    def eval(
+        self, eval_func: ModelEvalFuncType | None = None, **kwargs: Any
+    ) -> tuple[onnx.ModelProto, list[npt.NDArray]]:
         model = self.build(**kwargs)
         inputs = {x: self.values[x].value for x in self.inputs}
         if eval_func is not None:
@@ -291,7 +297,7 @@ class Builder:
             self.values[name].value = value
         return (model, outputs)
 
-    def export(self, output_dir, **kwargs):
+    def export(self, output_dir: str | Path, **kwargs: Any) -> None:
         model, outputs = self.eval(**kwargs)
         output_dir = Path(output_dir)
         (output_dir / "test_data_set_0").mkdir(parents=True, exist_ok=True)
@@ -314,8 +320,15 @@ class Builder:
                 f.write(Value(output_names[i], output_).proto().SerializeToString())
         onnx.save(model, output_dir / "model.onnx")
 
-    def __getattr__(self, op):
-        def fn(*args, outs=1, output_names=[], name=None, insert_index=None, **kwargs):
+    def __getattr__(self, op: str) -> Callable[..., ValueType | list[ValueType]]:
+        def fn(
+            *args: ValueType | ValueContentType | None,
+            outs: int = 1,
+            output_names: list[str] = [],
+            name: str | None = None,
+            insert_index: int | None = None,
+            **kwargs: Any,
+        ) -> ValueType | list[ValueType]:
             inputs = list(args)
             input_names = []
             for i, input_ in enumerate(inputs):
@@ -327,7 +340,7 @@ class Builder:
                     inputs[i] = input_.value
                 elif input_ is None:
                     input_names.append("")
-                else:
+                elif isinstance(input_, np.ndarray):
                     input_names.append(self.__GenValueName())
                     constant_tensor = numpy_helper.from_array(
                         input_, name=input_names[-1] + "_val"
@@ -339,12 +352,14 @@ class Builder:
                         value=constant_tensor,
                     )
                     if insert_index is None:
-                        self.nodes.append(new_node)
+                        self.__nodes.append(new_node)
                     else:
-                        self.nodes.insert(insert_index, new_node)
+                        self.__nodes.insert(insert_index, new_node)
                         if insert_index >= 0:
                             insert_index += 1
-                    self.add_value(input_names[-1], constant_tensor)
+                    self.add_value(input_names[-1], input_)
+                else:
+                    raise ValueError("Invalid input type: {}".format(type(input_)))
 
             if not output_names:
                 output_names = [self.__GenValueName() for i in range(outs)]
@@ -359,9 +374,9 @@ class Builder:
                 op, inputs=input_names, outputs=output_names, name=name, **kwargs
             )
             if insert_index is None:
-                self.nodes.append(node)
+                self.__nodes.append(node)
             else:
-                self.nodes.insert(insert_index, node)
+                self.__nodes.insert(insert_index, node)
                 if insert_index >= 0:
                     insert_index += 1
             for name in output_names:
@@ -373,3 +388,52 @@ class Builder:
                 return [self.values[name] for name in output_names]
 
         return fn
+
+
+def from_onnx(path: str) -> Builder:
+    # model = onnx.load(path)
+    builder = Builder()
+    inputs: list[ValueType] = []
+    # TODO write test for
+    # initializer_names = set(x.name for x in model.graph.initializer)
+    # for input_ in model.graph.input:
+    #     pass
+    #     if input_.name not in initializer_names:
+    #         if input_.type.WhichOneof("value") == "tensor_type":
+    #             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
+    #                 input_.type.tensor_type
+    #             )
+    #         inputs.append(builder.Input(np.zeros(shape, dtype=dtype), input_.name))
+    outputs = builder.Model(*inputs, file_path=path, prefix="")
+    if isinstance(outputs, list):
+        for output in outputs:
+            builder.Output(output, output.name)
+    else:
+        builder.Output(outputs, outputs.name)
+    return builder
+
+
+# TODO revive test_case support
+# def from_test_case(
+#     path: str | Path,
+#     onnx_name: str = "model.onnx",
+#     test_case_name: str = "test_data_set_0",
+# ) -> Builder:
+#     path = Path(path)
+#     input_values = onnx_builder.util.load_inputs_from_test_case(
+#         path, test_case_name, onnx_name=onnx_name
+#     )
+#     model = onnx.load(path / onnx_name)
+#     builder = Builder()
+#     inputs = []
+#     initializer_names = set(x.name for x in model.graph.initializer)
+#     for input_ in model.graph.input:
+#         if input_.name not in initializer_names:
+#             inputs.append(builder.Input(input_values[input_.name], input_.name))
+#     outputs = builder.Model(*inputs, file_path=path / onnx_name, prefix="")
+#     if isinstance(outputs, list):
+#         for output in outputs:
+#             builder.Output(output, output.name)
+#     else:
+#         builder.Output(outputs, outputs.name)
+#     return builder

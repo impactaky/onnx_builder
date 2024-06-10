@@ -4,9 +4,14 @@ import shutil
 from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
 import onnx
 from onnx import numpy_helper
-from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
+from google.protobuf.internal.containers import (
+    RepeatedCompositeFieldContainer,
+    RepeatedScalarFieldContainer,
+)
+from typing import Any
 
 import onnx_builder.util
 from .type import SequenceTensorType
@@ -14,11 +19,11 @@ from .type import SequenceTensorType
 np.set_printoptions(linewidth=sys.maxsize, threshold=sys.maxsize)
 
 
-def to_python_name(name):
+def to_python_name(name: str) -> str:
     return "v_" + re.sub(r"\W", "_", name)
 
 
-def dtype_to_str(dtype):
+def dtype_to_str(dtype: npt.DTypeLike) -> str:
     ret = str(dtype)
     if isinstance(dtype, np.dtypes.BoolDType):
         ret = "np.bool_"
@@ -27,7 +32,7 @@ def dtype_to_str(dtype):
     return ret
 
 
-def proto_to_code(obj, indent=0):
+def proto_to_code(obj: Any, indent: int = 0) -> str:
     if isinstance(obj, RepeatedCompositeFieldContainer):
         ret = " " * indent + "[\n"
         for o in obj:
@@ -41,16 +46,21 @@ def proto_to_code(obj, indent=0):
 
 
 class CodeGenerator:
-    def __init__(self, builder_name="builder", subgraph_index=0, inline_threshold=12):
+    def __init__(
+        self,
+        builder_name: str = "builder",
+        subgraph_index: int = 0,
+        inline_threshold: int = 12,
+    ):
         self.base_indent = 0
         self.inline_threshold = inline_threshold
         self.subgraph_index = subgraph_index
         self.builder_name = builder_name
 
-    def ndarray_to_str(self, array, name):
+    def ndarray_to_str(self, array: npt.NDArray, name: str) -> str:
         if array.size <= self.inline_threshold:
             val = (
-                np.array2string(array, max_line_width=np.inf, separator=", ")
+                np.array2string(array, max_line_width=sys.maxsize, separator=", ")
                 .replace("\n", "")
                 .replace("  ", " ")
                 .replace("inf", "np.inf")
@@ -66,15 +76,15 @@ class CodeGenerator:
             ret = "np.load(storage/'{}.npy')".format(name)
         return ret
 
-    def tensor_to_str(self, tensor):
+    def tensor_to_str(self, tensor: onnx.TensorProto) -> str:
         array = numpy_helper.to_array(tensor)
         name = to_python_name(tensor.name)
         return self.ndarray_to_str(array, name)
 
-    def write(self, line=""):
+    def write(self, line: str = "") -> None:
         self.python_file.write(" " * self.base_indent + str(line) + "\n")
 
-    def value_info_to_prefix(self, vi):
+    def value_info_to_prefix(self, vi: onnx.ValueInfoProto) -> str:
         if vi.type.WhichOneof("value") == "sequence_type":
             return ""
         elif vi.type.WhichOneof("value") == "optional_type":
@@ -82,7 +92,7 @@ class CodeGenerator:
         else:
             return ""
 
-    def value_info_to_code(self, vi):
+    def value_info_to_code(self, vi: onnx.ValueInfoProto) -> str:
         if vi.type.WhichOneof("value") == "tensor_type":
             (shape, dtype) = onnx_builder.util.value_info_to_numpy_info(
                 vi.type.tensor_type
@@ -120,7 +130,8 @@ class CodeGenerator:
         else:
             return "name='{}'".format(vi.name)
 
-    def value_to_str(self, value):
+    # TODO Don't use Any
+    def value_to_str(self, value: Any) -> str:
         if type(value) == onnx.TensorProto:
             return self.tensor_to_str(value)
         elif type(value) == onnx.GraphProto:
@@ -150,7 +161,22 @@ class CodeGenerator:
         else:
             return str(value)
 
-    def graph_to_code(self, graph, inputs={}):
+    def input_names_to_str(self, names: RepeatedScalarFieldContainer[str]) -> str:
+        holder: list[str | None] = []
+        for name in names:
+            if name:
+                holder.append(to_python_name(name))
+            else:
+                holder.append(None)
+        if holder:
+            ret = "{}, ".format(holder)
+            return re.sub(r"[\[\]\']", "", ret)
+        else:
+            return ""
+
+    def graph_to_code(
+        self, graph: onnx.GraphProto, inputs: dict[str, npt.NDArray] = {}
+    ) -> None:
         self.write("# inputs")
         initializers = [x.name for x in graph.initializer]
         for input_ in graph.input:
@@ -206,24 +232,18 @@ class CodeGenerator:
 
             attributes_str = ", ".join(attributes) if len(attributes) > 0 else ""
 
-            outputs = [to_python_name(output) for output in node.output]
-            outputs = re.sub(r"[\[\]\']", "", str(outputs))
+            outputs_list = [to_python_name(output) for output in node.output]
+            outputs_str = re.sub(r"[\[\]\']", "", str(outputs_list))
             input_names += node.output
-            inputs = []
-            for input_ in node.input:
-                if input_:
-                    inputs.append(to_python_name(input_))
-                else:
-                    inputs.append(None)
-            if inputs:
-                inputs = "{}, ".format(inputs)
-                inputs = re.sub(r"[\[\]\']", "", inputs)
-            else:
-                inputs = ""
+            inputs_str = self.input_names_to_str(node.input)
 
             self.write(
                 "{} = {}.{}({}{})".format(
-                    outputs, self.builder_name, node.op_type, inputs, attributes_str
+                    outputs_str,
+                    self.builder_name,
+                    node.op_type,
+                    inputs_str,
+                    attributes_str,
                 )
             )
         self.write()
@@ -241,26 +261,28 @@ class CodeGenerator:
             )
         self.write()
 
-    def generate(self, model_or_test_case, output_dir):
+    def generate(
+        self, model_or_test_case: onnx.ModelProto | str | Path, output_dir: str
+    ) -> None:
         self.output_dir = Path(output_dir)
         if self.output_dir.exists():
             shutil.rmtree(self.output_dir)
         self.storage_dir = self.output_dir / "storage"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.python_file = open(self.output_dir / "exporter.py", "w")
+        inputs: dict[str, npt.NDArray] = {}
         if isinstance(model_or_test_case, onnx.ModelProto):
             model = model_or_test_case
             self.with_test_case = False
-            inputs = {}
         elif str(model_or_test_case).endswith(".onnx"):
             model = onnx.load(model_or_test_case)
             self.with_test_case = False
-            inputs = {}
         else:
-            test_case_dir = Path(model_or_test_case)
-            inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
-            model = onnx.load(test_case_dir / "model.onnx")
-            self.with_test_case = True
+            raise NotImplementedError("Currently testcase unsupported!")
+            # test_case_dir = Path(model_or_test_case)
+            # inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
+            # model = onnx.load(test_case_dir / "model.onnx")
+            # self.with_test_case = True
 
         self.write("import numpy as np")
         self.write("from pathlib import Path")
