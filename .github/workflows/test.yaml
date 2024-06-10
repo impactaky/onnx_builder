@@ -18,6 +18,4 @@ jobs:
         cache: "pip"
     - run: pip install .[dev]
     - run: pytest --cov test -k from_onnx
-   -
-
-        uses: codecov/codecov-action@v3
+    - uses: codecov/codecov-action@v3
