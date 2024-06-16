@@ -4,6 +4,7 @@ import glob
 import numpy as np
 import onnx
 import onnx_builder
+from onnx_builder.value import ValueContentType
 import pytest
 import re
 import sys
@@ -253,6 +254,29 @@ test_cases = [
 ]
 
 
+def assert_equal_value(actual: ValueContentType, expected: ValueContentType) -> None:
+    assert isinstance(actual, type(expected))
+    if isinstance(actual, np.ndarray):
+        try:
+            assert np.array_equal(actual, expected, equal_nan=(actual.dtype != object))
+        except AssertionError:
+            assert np.allclose(
+                actual,
+                expected,
+                atol=1.0e-4,
+                rtol=1.0e-6,
+                equal_nan=(actual.dtype != object),
+            )
+    elif isinstance(actual, str):
+        assert actual == expected
+    elif isinstance(actual, list):
+        assert len(actual) == len(expected)
+        for e1, e2 in zip(actual, expected):
+            assert_equal_value(e1, e2)
+    else:
+        raise NotImplementedError(f"Unsupported value type: {type(actual)}")
+
+
 @pytest.mark.parametrize("test_case", test_cases)
 def test_from_test_case(test_case: str) -> None:
     if numpy_unsupported(str(test_case)):
@@ -272,7 +296,4 @@ def test_from_test_case(test_case: str) -> None:
     )
     for k, v in orig_outputs.items():
         v2 = exported_outputs[k]
-        try:
-            assert np.array_equal(v, v2, equal_nan=True)
-        except AssertionError:
-            assert np.allclose(v, v2, atol=1.0e-4, rtol=1.0e-6, equal_nan=True)
+        assert_equal_value(v, v2)
