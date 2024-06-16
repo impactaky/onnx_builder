@@ -47,6 +47,8 @@ def _impl_load_pb(
         value = onnx.SequenceProto()
     elif type_ == "map_type":
         value = onnx.MapProto()
+    elif type_ == "optional_type":
+        value = onnx.OptionalProto()
     else:
         raise NotImplementedError("Unsupported type: {}".format(type_))
     value.ParseFromString(f.read())
@@ -72,6 +74,9 @@ def load_pbs(
             if vis_dict[seq.name].type.WhichOneof("value") != value_type:
                 raise RuntimeError("Failure load {}".format(pb))
             values[tensor.name] = onnx.numpy_helper.to_list(seq)
+        elif value_type == "optional_type":
+            opt = _impl_load_pb(pb, value_type, names)
+            values[tensor.name] = onnx.numpy_helper.to_optional(opt)
         else:
             raise RuntimeError("Unsupported value_type: {}".format(value_type))
         if tensor.name in names:
