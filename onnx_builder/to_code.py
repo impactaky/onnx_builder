@@ -58,6 +58,11 @@ class CodeGenerator:
         self.builder_name = builder_name
 
     def ndarray_to_str(self, array: npt.NDArray, name: str) -> str:
+        if array.size == 0:
+            return "np.empty(shape={}, dtype={})".format(
+                array.shape, dtype_to_str(array.dtype)
+            )
+
         if array.size <= self.inline_threshold:
             val = (
                 np.array2string(array, max_line_width=sys.maxsize, separator=", ")
@@ -66,15 +71,14 @@ class CodeGenerator:
                 .replace("inf", "np.inf")
                 .replace("nan", "np.nan")
             )
-            ret = "np.array({}, dtype={})".format(
+            return "np.array({}, dtype={})".format(
                 val,
                 dtype_to_str(array.dtype),
             )
-        else:
-            name = to_python_name(name)
-            np.save(self.storage_dir / "{}.npy".format(name), array)
-            ret = "np.load(storage/'{}.npy')".format(name)
-        return ret
+
+        name = to_python_name(name)
+        np.save(self.storage_dir / "{}.npy".format(name), array)
+        return "np.load(storage/'{}.npy')".format(name)
 
     def tensor_to_str(self, tensor: onnx.TensorProto) -> str:
         array = numpy_helper.to_array(tensor)
