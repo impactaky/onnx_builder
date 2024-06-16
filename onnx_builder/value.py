@@ -138,7 +138,6 @@ class Value:
             return numpy_helper.from_list(
                 self.value,
                 self.name,
-                onnx.helper.np_dtype_to_tensor_dtype(np.dtype(self.dtype)),
             )
         else:
             return self.tensorProto()

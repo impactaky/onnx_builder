@@ -186,15 +186,33 @@ class CodeGenerator:
         for input_ in graph.input:
             name = input_.name
             if name in inputs:
-                self.write(
-                    "{} = {}.{}Input({}, name='{}')".format(
-                        to_python_name(name),
-                        self.builder_name,
-                        self.value_info_to_prefix(input_),
-                        self.ndarray_to_str(inputs[name], name),
-                        name,
+                if isinstance(inputs[name], np.ndarray):
+                    self.write(
+                        "{} = {}.{}Input({}, name='{}')".format(
+                            to_python_name(name),
+                            self.builder_name,
+                            self.value_info_to_prefix(input_),
+                            self.ndarray_to_str(inputs[name], name),
+                            name,
+                        )
                     )
-                )
+                elif isinstance(inputs[name], list):
+                    if isinstance(inputs[name][0], np.ndarray):
+                        list_str = "["
+                        for array in inputs[name]:
+                            list_str += self.ndarray_to_str(array, name) + ", "
+                        list_str += "]"
+                        self.write(
+                            "{} = {}.{}Input({}, shape={}, dtype={}, name='{}')".format(
+                                to_python_name(name),
+                                self.builder_name,
+                                self.value_info_to_prefix(input_),
+                                list_str,
+                                inputs[name][0].shape,
+                                dtype_to_str(inputs[name][0].dtype),
+                                name,
+                            )
+                        )
                 continue
             if name in initializers:
                 continue
