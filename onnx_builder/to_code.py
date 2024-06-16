@@ -262,7 +262,7 @@ class CodeGenerator:
         self.write()
 
     def generate(
-        self, model_or_test_case: onnx.ModelProto | str | Path, output_dir: str
+        self, model_or_test_case: onnx.ModelProto | str | Path, output_dir: str | Path
     ) -> None:
         self.output_dir = Path(output_dir)
         if self.output_dir.exists():
@@ -278,11 +278,10 @@ class CodeGenerator:
             model = onnx.load(model_or_test_case)
             self.with_test_case = False
         else:
-            raise NotImplementedError("Currently testcase unsupported!")
-            # test_case_dir = Path(model_or_test_case)
-            # inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
-            # model = onnx.load(test_case_dir / "model.onnx")
-            # self.with_test_case = True
+            test_case_dir = Path(model_or_test_case)
+            inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
+            model = onnx.load(test_case_dir / "model.onnx")
+            self.with_test_case = True
 
         self.write("import numpy as np")
         self.write("from pathlib import Path")
