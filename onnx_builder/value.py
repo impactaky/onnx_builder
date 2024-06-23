@@ -133,12 +133,13 @@ class Value:
         return numpy_helper.from_array(self.value, name=self.name)
 
     def proto(self) -> onnx.SequenceProto | onnx.TensorProto:
-        if self.is_sequence():
+        if self.is_optional:
+            return numpy_helper.from_optional(self.value, name=self.name)
+        elif self.is_sequence():
             assert isinstance(self.value, list)
             return numpy_helper.from_list(
                 self.value,
-                self.name,
-                onnx.helper.np_dtype_to_tensor_dtype(np.dtype(self.dtype)),
+                name=self.name,
             )
         else:
             return self.tensorProto()

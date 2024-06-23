@@ -3,6 +3,7 @@ import onnx
 from onnx import numpy_helper
 import numpy as np
 import numpy.typing as npt
+import onnx_builder
 from onnx_builder.value import Value, OptionalValue, ValueType, ValueContentType
 from .type import SequenceTensorType
 from typing import Callable, Any
@@ -293,6 +294,7 @@ class Builder:
             outputs = eval_func(model, inputs, self.outputs)
         else:
             outputs = self.__eval_func(model, inputs, self.outputs)
+
         for name, value in zip(self.outputs, outputs):
             self.values[name].value = value
         return (model, outputs)
@@ -312,12 +314,11 @@ class Builder:
             ) as f:
                 f.write(self.values[input_].proto().SerializeToString())
         # save outputs
-        output_names = self.outputs
-        for i, output_ in enumerate(outputs):
+        for i, output_ in enumerate(self.outputs):
             with open(
                 output_dir / "test_data_set_0" / "output_{}.pb".format(i), "wb"
             ) as f:
-                f.write(Value(output_names[i], output_).proto().SerializeToString())
+                f.write(self.values[output_].proto().SerializeToString())
         onnx.save(model, output_dir / "model.onnx")
 
     def __getattr__(self, op: str) -> Callable[..., ValueType | list[ValueType]]:
@@ -413,27 +414,26 @@ def from_onnx(path: str) -> Builder:
     return builder
 
 
-# TODO revive test_case support
-# def from_test_case(
-#     path: str | Path,
-#     onnx_name: str = "model.onnx",
-#     test_case_name: str = "test_data_set_0",
-# ) -> Builder:
-#     path = Path(path)
-#     input_values = onnx_builder.util.load_inputs_from_test_case(
-#         path, test_case_name, onnx_name=onnx_name
-#     )
-#     model = onnx.load(path / onnx_name)
-#     builder = Builder()
-#     inputs = []
-#     initializer_names = set(x.name for x in model.graph.initializer)
-#     for input_ in model.graph.input:
-#         if input_.name not in initializer_names:
-#             inputs.append(builder.Input(input_values[input_.name], input_.name))
-#     outputs = builder.Model(*inputs, file_path=path / onnx_name, prefix="")
-#     if isinstance(outputs, list):
-#         for output in outputs:
-#             builder.Output(output, output.name)
-#     else:
-#         builder.Output(outputs, outputs.name)
-#     return builder
+def from_test_case(
+    path: str | Path,
+    onnx_name: str = "model.onnx",
+    test_case_name: str = "test_data_set_0",
+) -> Builder:
+    path = Path(path)
+    input_values = onnx_builder.util.load_inputs_from_test_case(
+        path, test_case_name, onnx_name=onnx_name
+    )
+    model = onnx.load(path / onnx_name)
+    builder = Builder()
+    inputs = []
+    initializer_names = set(x.name for x in model.graph.initializer)
+    for input_ in model.graph.input:
+        if input_.name not in initializer_names:
+            inputs.append(builder.Input(input_values[input_.name], input_.name))
+    outputs = builder.Model(*inputs, file_path=str(path / onnx_name), prefix="")
+    if isinstance(outputs, list):
+        for output in outputs:
+            builder.Output(output, output.name)
+    else:
+        builder.Output(outputs, outputs.name)
+    return builder

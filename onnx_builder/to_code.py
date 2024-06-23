@@ -58,6 +58,11 @@ class CodeGenerator:
         self.builder_name = builder_name
 
     def ndarray_to_str(self, array: npt.NDArray, name: str) -> str:
+        if array.size == 0:
+            return "np.empty(shape={}, dtype={})".format(
+                array.shape, dtype_to_str(array.dtype)
+            )
+
         if array.size <= self.inline_threshold:
             val = (
                 np.array2string(array, max_line_width=sys.maxsize, separator=", ")
@@ -66,15 +71,14 @@ class CodeGenerator:
                 .replace("inf", "np.inf")
                 .replace("nan", "np.nan")
             )
-            ret = "np.array({}, dtype={})".format(
+            return "np.array({}, dtype={})".format(
                 val,
                 dtype_to_str(array.dtype),
             )
-        else:
-            name = to_python_name(name)
-            np.save(self.storage_dir / "{}.npy".format(name), array)
-            ret = "np.load(storage/'{}.npy')".format(name)
-        return ret
+
+        name = to_python_name(name)
+        np.save(self.storage_dir / "{}.npy".format(name), array)
+        return "np.load(storage/'{}.npy')".format(name)
 
     def tensor_to_str(self, tensor: onnx.TensorProto) -> str:
         array = numpy_helper.to_array(tensor)
@@ -182,15 +186,46 @@ class CodeGenerator:
         for input_ in graph.input:
             name = input_.name
             if name in inputs:
-                self.write(
-                    "{} = {}.{}Input({}, name='{}')".format(
-                        to_python_name(name),
-                        self.builder_name,
-                        self.value_info_to_prefix(input_),
-                        self.ndarray_to_str(inputs[name], name),
-                        name,
+                if isinstance(inputs[name], np.ndarray):
+                    self.write(
+                        "{} = {}.{}Input({}, name='{}')".format(
+                            to_python_name(name),
+                            self.builder_name,
+                            self.value_info_to_prefix(input_),
+                            self.ndarray_to_str(inputs[name], name),
+                            name,
+                        )
                     )
-                )
+                elif isinstance(inputs[name], list):
+                    if isinstance(inputs[name][0], np.ndarray):
+                        list_str = "["
+                        for array in inputs[name]:
+                            list_str += self.ndarray_to_str(array, name) + ", "
+                        list_str += "]"
+                        self.write(
+                            "{} = {}.{}Input({}, shape={}, dtype={}, name='{}')".format(
+                                to_python_name(name),
+                                self.builder_name,
+                                self.value_info_to_prefix(input_),
+                                list_str,
+                                inputs[name][0].shape,
+                                dtype_to_str(inputs[name][0].dtype),
+                                name,
+                            )
+                        )
+                elif inputs[name] is None:
+                    self.write(
+                        "{} = {}.{}Input(None, name='{}')".format(
+                            to_python_name(name),
+                            self.builder_name,
+                            self.value_info_to_prefix(input_),
+                            name,
+                        )
+                    )
+                else:
+                    raise NotImplementedError(
+                        f"Unsupported input type: {type(inputs[name])}"
+                    )
                 continue
             if name in initializers:
                 continue
@@ -262,7 +297,7 @@ class CodeGenerator:
         self.write()
 
     def generate(
-        self, model_or_test_case: onnx.ModelProto | str | Path, output_dir: str
+        self, model_or_test_case: onnx.ModelProto | str | Path, output_dir: str | Path
     ) -> None:
         self.output_dir = Path(output_dir)
         if self.output_dir.exists():
@@ -278,11 +313,10 @@ class CodeGenerator:
             model = onnx.load(model_or_test_case)
             self.with_test_case = False
         else:
-            raise NotImplementedError("Currently testcase unsupported!")
-            # test_case_dir = Path(model_or_test_case)
-            # inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
-            # model = onnx.load(test_case_dir / "model.onnx")
-            # self.with_test_case = True
+            test_case_dir = Path(model_or_test_case)
+            inputs = onnx_builder.util.load_inputs_from_test_case(test_case_dir)
+            model = onnx.load(test_case_dir / "model.onnx")
+            self.with_test_case = True
 
         self.write("import numpy as np")
         self.write("from pathlib import Path")
