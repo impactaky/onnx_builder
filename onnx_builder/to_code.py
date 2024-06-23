@@ -213,6 +213,19 @@ class CodeGenerator:
                                 name,
                             )
                         )
+                elif inputs[name] is None:
+                    self.write(
+                        "{} = {}.{}Input(None, name='{}')".format(
+                            to_python_name(name),
+                            self.builder_name,
+                            self.value_info_to_prefix(input_),
+                            name,
+                        )
+                    )
+                else:
+                    raise NotImplementedError(
+                        f"Unsupported input type: {type(inputs[name])}"
+                    )
                 continue
             if name in initializers:
                 continue
