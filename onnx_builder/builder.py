@@ -294,6 +294,7 @@ class Builder:
             outputs = eval_func(model, inputs, self.outputs)
         else:
             outputs = self.__eval_func(model, inputs, self.outputs)
+
         for name, value in zip(self.outputs, outputs):
             self.values[name].value = value
         return (model, outputs)

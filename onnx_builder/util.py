@@ -66,21 +66,24 @@ def load_pbs(
     for pb in pbs:
         tensor = _impl_load_pb(pb, "tensor_type", names)
         value_type = vis_dict[tensor.name].type.WhichOneof("value")
+        name = tensor.name
         # TODO support map type
         if value_type == "tensor_type":
-            values[tensor.name] = onnx.numpy_helper.to_array(tensor)
+            values[name] = onnx.numpy_helper.to_array(tensor)
         elif value_type == "sequence_type":
             seq = _impl_load_pb(pb, value_type, names)
+            name = seq.name
             if vis_dict[seq.name].type.WhichOneof("value") != value_type:
                 raise RuntimeError("Failure load {}".format(pb))
-            values[tensor.name] = onnx.numpy_helper.to_list(seq)
+            values[name] = onnx.numpy_helper.to_list(seq)
         elif value_type == "optional_type":
             opt = _impl_load_pb(pb, value_type, names)
-            values[tensor.name] = onnx.numpy_helper.to_optional(opt)
+            name = opt.name
+            values[name] = onnx.numpy_helper.to_optional(opt)
         else:
             raise RuntimeError("Unsupported value_type: {}".format(value_type))
         if tensor.name in names:
-            names.remove(tensor.name)
+            names.remove(name)
         else:
             names.pop(0)
     return values

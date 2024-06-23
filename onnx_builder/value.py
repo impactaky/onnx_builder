@@ -137,7 +137,7 @@ class Value:
             assert isinstance(self.value, list)
             return numpy_helper.from_list(
                 self.value,
-                self.name,
+                name=self.name,
             )
         else:
             return self.tensorProto()

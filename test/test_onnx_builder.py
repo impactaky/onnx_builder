@@ -256,6 +256,7 @@ test_cases = [
 
 def assert_equal_value(actual: ValueContentType, expected: ValueContentType) -> None:
     assert isinstance(actual, type(expected))
+
     if isinstance(actual, np.ndarray):
         try:
             assert np.array_equal(actual, expected, equal_nan=(actual.dtype != object))
