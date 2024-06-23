@@ -314,12 +314,11 @@ class Builder:
             ) as f:
                 f.write(self.values[input_].proto().SerializeToString())
         # save outputs
-        output_names = self.outputs
-        for i, output_ in enumerate(outputs):
+        for i, output_ in enumerate(self.outputs):
             with open(
                 output_dir / "test_data_set_0" / "output_{}.pb".format(i), "wb"
             ) as f:
-                f.write(Value(output_names[i], output_).proto().SerializeToString())
+                f.write(self.values[output_].proto().SerializeToString())
         onnx.save(model, output_dir / "model.onnx")
 
     def __getattr__(self, op: str) -> Callable[..., ValueType | list[ValueType]]:
