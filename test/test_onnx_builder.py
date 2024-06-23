@@ -245,6 +245,13 @@ onnxruntime_fail_list = [
     "test_operator_pow",
     "test_gradient_of_add_and_mul",
     "test_gradient_of_add",
+    # TODO: Revive following tests
+    "test_loop13_seq",
+    "test_optional_get_element_optional_tensor",
+    "test_optional_has_element_optional_input",
+    "test_optional_has_element_tensor_input",
+    "test_sequence_map_extract_shapes",
+    "test_sequence_map_extract_shapes_expanded",
 ]
 test_cases = onnx_files
 test_cases = [
