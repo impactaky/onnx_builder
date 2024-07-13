@@ -1,5 +1,19 @@
 import onnx
 import numpy as np
+from .util import value_info_to_numpy_info
+
+
+class Tensor:
+    def __init__(
+        self, shape: tuple[int | str | None, ...] | None, dtype: np.dtype = np.float32
+    ):
+        self.shape = shape
+        self.dtype = dtype
+
+    @classmethod
+    def from_proto(cls, proto: onnx.TypeProto.Tensor) -> "Tensor":
+        shape, dtype = value_info_to_numpy_info(proto)
+        return cls(shape, dtype)
 
 
 class SequenceTensorType:
