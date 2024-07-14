@@ -4,6 +4,8 @@ import numpy.typing as npt
 from pathlib import Path
 import glob
 import os
+import sys
+import re
 
 
 def make_value_info(name: str) -> onnx.ValueInfoProto:
@@ -14,7 +16,7 @@ def make_value_info(name: str) -> onnx.ValueInfoProto:
 
 def value_info_to_numpy_info(
     tp: onnx.TypeProto.Tensor,
-) -> tuple[tuple[int | str | None, ...] | None, np.typing.DTypeLike]:
+) -> tuple[tuple[int | str | None, ...] | None, npt.DTypeLike]:
     shape = None
     elem_type: npt.DTypeLike = np.float32
     if tp.HasField("shape"):
@@ -35,6 +37,55 @@ def value_info_to_numpy_info(
     if tp.HasField("elem_type"):
         elem_type = onnx.helper.tensor_dtype_to_np_dtype(getattr(tp, "elem_type"))
     return (shape, elem_type)
+
+
+def dtype_to_str(dtype: npt.DTypeLike) -> str:
+    ret = f"np.{np.dtype(dtype).name}"
+    if dtype == np.bool_:
+        ret = "np.bool_"
+    elif dtype == np.object_:
+        ret = "np.object_"
+    return ret
+
+
+def to_python_name(name: str) -> str:
+    return "v_" + re.sub(r"\W", "_", name)
+
+
+def ndarray_to_str(
+    array: npt.NDArray,
+    name: str | None = None,
+    inline_threshold: int = 12,
+    storage_dir: Path | str | None = None,
+) -> str:
+    if array.size == 0:
+        return "np.empty(shape={}, dtype={})".format(
+            array.shape, dtype_to_str(array.dtype)
+        )
+
+    if array.size <= inline_threshold:
+        val = (
+            np.array2string(array, max_line_width=sys.maxsize, separator=", ")
+            .replace("\n", "")
+            .replace("  ", " ")
+            .replace("inf", "np.inf")
+            .replace("nan", "np.nan")
+        )
+        return "np.array({}, dtype={})".format(
+            val,
+            dtype_to_str(array.dtype),
+        )
+
+    if storage_dir is None:
+        if name is None:
+            name = "unnamed"
+        return f"np.load('{name}.npy')"
+
+    assert name is not None
+    name = to_python_name(name)
+    save_path = Path(storage_dir) / f"{name}.npy"
+    np.save(save_path, array)
+    return f"np.load('{save_path}')"
 
 
 def _impl_load_pb(

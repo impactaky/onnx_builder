@@ -1,23 +1,66 @@
 import onnx
 import numpy as np
-from .util import value_info_to_numpy_info
+from pathlib import Path
+from .util import value_info_to_numpy_info, ndarray_to_str, dtype_to_str
+from numpy import typing as npt
+
+ShapeType = tuple[int | str | None, ...]
+TensorDType = (
+    np.float32
+    | np.uint8
+    | np.int8
+    | np.uint16
+    | np.int16
+    | np.int32
+    | np.int64
+    | np.bool_
+    | np.float16
+    | np.float64
+    | np.complex64
+    | np.complex128
+    | np.uint32
+    | np.uint64
+    | np.object_
+)
+ArrayType = npt.NDArray[TensorDType]
 
 
 class Tensor:
     def __init__(
-        self, shape: tuple[int | str | None, ...] | None, dtype: np.dtype = np.float32
+        self,
+        array: npt.NDArray[np.float32] | None = None,
+        shape: ShapeType | None = None,
+        dtype: npt.DTypeLike = np.float32,
     ):
+        self.array = array
+        if array is not None:
+            if shape is None:
+                shape = array.shape
+            if dtype is None:
+                dtype = array.dtype
         self.shape = shape
         self.dtype = dtype
 
     @classmethod
     def from_proto(cls, proto: onnx.TypeProto.Tensor) -> "Tensor":
         shape, dtype = value_info_to_numpy_info(proto)
-        return cls(shape, dtype)
+        return cls(shape=shape, dtype=dtype)
+
+    def __str__(self) -> str:
+        if self.array is None:
+            return f"Tensor(shape={self.shape}, dtype={dtype_to_str(self.dtype)})"
+        return ndarray_to_str(self.array)
+
+    def to_code(
+        self, name: str | None = None, storage_dir: Path | str | None = None
+    ) -> str:
+        if self.array is None:
+            return f"Tensor(shape={self.shape}, dtype={dtype_to_str(self.dtype)})"
+        return ndarray_to_str(self.array, name=name, storage_dir=storage_dir)
 
 
 class SequenceTensorType:
-    def __init__(self, dim: int, dtype: np.dtype):
+    def __init__(self, dim: int, dtype: npt.DTypeLike):
         self.dim = dim
         self.dtype = dtype
 
