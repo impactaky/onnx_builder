@@ -6,21 +6,22 @@ authors = [{name="impactaly", email="impactaky@users.noreply.github.com"}]
 license = {text = "Apache-2.0"}
 readme = "README.md"
 dependencies = [
-    "numpy",
+    "numpy<2.0",
     "onnx==1.16.1",
     "onnxruntime"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest-cov",
     "mypy",
     "nptyping",
     "pre-commit",
+    "pyright",
     "pytest",
+    "pytest-cov",
     "pytest-parallel",
     "ruff",
-    "types-protobuf"
+    "types-protobuf",
 ]
 
 [project.urls]

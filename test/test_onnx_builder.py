@@ -9,7 +9,7 @@ import pytest
 import re
 import sys
 
-onnx_files = glob.glob(f"{onnx.__path__[0]}/backend/test/**/model.onnx", recursive=True)
+onnx_files = glob.glob(f"{onnx.__path__[0]}/backend/test/**/model.onnx", recursive=True)  # type: ignore
 
 numpy_unsupported_dtypes = [
     "BFLOAT16",
@@ -265,6 +265,7 @@ def assert_equal_value(actual: ValueContentType, expected: ValueContentType) -> 
     assert isinstance(actual, type(expected))
 
     if isinstance(actual, np.ndarray):
+        assert isinstance(expected, np.ndarray)
         try:
             assert np.array_equal(actual, expected, equal_nan=(actual.dtype != object))
         except AssertionError:
@@ -278,6 +279,7 @@ def assert_equal_value(actual: ValueContentType, expected: ValueContentType) -> 
     elif isinstance(actual, str):
         assert actual == expected
     elif isinstance(actual, list):
+        assert isinstance(expected, list)
         assert len(actual) == len(expected)
         for e1, e2 in zip(actual, expected):
             assert_equal_value(e1, e2)

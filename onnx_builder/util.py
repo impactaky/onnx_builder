@@ -3,9 +3,10 @@ import numpy as np
 import numpy.typing as npt
 from pathlib import Path
 import glob
-import os
 import sys
 import re
+from onnx_builder import typing as obt
+from typing import Iterable
 
 
 def make_value_info(name: str) -> onnx.ValueInfoProto:
@@ -90,7 +91,7 @@ def ndarray_to_str(
 
 def _impl_load_pb(
     pb: str, type_: str, names: list[str]
-) -> onnx.TensorProto | onnx.SequenceProto | onnx.MapProto:
+) -> onnx.TensorProto | onnx.SequenceProto | onnx.MapProto | onnx.OptionalProto:
     f = open(pb, "rb")
     if type_ == "tensor_type":
         value = onnx.TensorProto()
@@ -109,8 +110,8 @@ def _impl_load_pb(
 
 
 def load_pbs(
-    pbs: list[str], vis: list[onnx.ValueInfoProto]
-) -> dict[str, np.ndarray | list[np.ndarray]]:
+    pbs: list[str], vis: Iterable[onnx.ValueInfoProto]
+) -> dict[str, obt.ArrayType | list[obt.ArrayType]]:
     values = {}
     names = [x.name for x in vis]
     vis_dict = {x.name: x for x in vis}
@@ -120,16 +121,19 @@ def load_pbs(
         name = tensor.name
         # TODO support map type
         if value_type == "tensor_type":
+            assert isinstance(tensor, onnx.TensorProto)
             values[name] = onnx.numpy_helper.to_array(tensor)
         elif value_type == "sequence_type":
             seq = _impl_load_pb(pb, value_type, names)
             name = seq.name
             if vis_dict[seq.name].type.WhichOneof("value") != value_type:
                 raise RuntimeError("Failure load {}".format(pb))
+            assert isinstance(seq, onnx.SequenceProto)
             values[name] = onnx.numpy_helper.to_list(seq)
         elif value_type == "optional_type":
             opt = _impl_load_pb(pb, value_type, names)
             name = opt.name
+            assert isinstance(opt, onnx.OptionalProto)
             values[name] = onnx.numpy_helper.to_optional(opt)
         else:
             raise RuntimeError("Unsupported value_type: {}".format(value_type))
@@ -141,10 +145,10 @@ def load_pbs(
 
 
 def load_inputs_from_test_case(
-    test_case_dir: os.PathLike,
+    test_case_dir: Path | str,
     test_case_name: str = "test_data_set_0",
     onnx_name: str = "model.onnx",
-) -> dict[str, np.ndarray | list[np.ndarray]]:
+) -> dict[str, obt.ArrayType | list[obt.ArrayType]]:
     test_case_path = Path(test_case_dir)
     model = onnx.load(test_case_path / onnx_name)
     input_pbs = glob.glob(str(test_case_path / test_case_name / "input_*.pb"))
@@ -152,10 +156,10 @@ def load_inputs_from_test_case(
 
 
 def load_outputs_from_test_case(
-    test_case_dir: os.PathLike,
+    test_case_dir: Path | str,
     test_case_name: str = "test_data_set_0",
     onnx_name: str = "model.onnx",
-) -> dict[str, np.ndarray | list[np.ndarray]]:
+) -> dict[str, obt.ArrayType | list[obt.ArrayType]]:
     test_case_path = Path(test_case_dir)
     model = onnx.load(test_case_path / onnx_name)
     output_pbs = glob.glob(str(test_case_path / test_case_name / "output_*.pb"))

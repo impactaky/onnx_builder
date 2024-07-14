@@ -4,9 +4,10 @@ import numpy as np
 import numpy.typing as npt
 
 from typing import List, Optional, Sequence, Union
+from onnx_builder import typing as obt
 
 ValueType = Union["Value", "OptionalValue"]
-ValueContentType = list[npt.NDArray] | npt.NDArray | None
+ValueContentType = Union[list[obt.ArrayType], obt.ArrayType, None]
 
 
 def make_tensor_optional_value_info(
@@ -55,12 +56,12 @@ def make_tensor_sequence_optional_value_info(
 
 
 def ndarray_to_value_info(
-    arr: npt.NDArray | None,
+    arr: obt.ArrayType | None,
     name: str,
     shape: tuple[int, ...] | None = None,
-    dtype: np.dtype | None = None,
+    dtype: npt.DTypeLike | None = None,
 ) -> onnx.ValueInfoProto:
-    dtype_: np.dtype = np.dtype(np.float32)
+    dtype_: npt.DTypeLike = np.dtype(np.float32)
     if dtype is None:
         if isinstance(arr, np.ndarray):
             dtype_ = arr.dtype
@@ -132,7 +133,7 @@ class Value:
         assert isinstance(self.value, np.ndarray)
         return numpy_helper.from_array(self.value, name=self.name)
 
-    def proto(self) -> onnx.SequenceProto | onnx.TensorProto:
+    def proto(self) -> onnx.SequenceProto | onnx.TensorProto | onnx.OptionalProto:
         if self.is_optional:
             return numpy_helper.from_optional(self.value, name=self.name)
         elif self.is_sequence():

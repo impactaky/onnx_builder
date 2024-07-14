@@ -14,6 +14,7 @@ from google.protobuf.internal.containers import (
 from typing import Any
 
 import onnx_builder.util
+from onnx_builder import typing as obt
 from .type import SequenceTensorType
 
 np.set_printoptions(linewidth=sys.maxsize, threshold=sys.maxsize)
@@ -24,11 +25,11 @@ def to_python_name(name: str) -> str:
 
 
 def dtype_to_str(dtype: npt.DTypeLike) -> str:
-    ret = str(dtype)
-    if isinstance(dtype, np.dtypes.BoolDType):
+    ret = f"np.{np.dtype(dtype).name}"
+    if dtype == np.bool_:
         ret = "np.bool_"
-    elif not isinstance(dtype, np.dtypes.ObjectDType):
-        ret = "np.{}".format(dtype)
+    elif dtype == np.object_:
+        ret = "np.object_"
     return ret
 
 
@@ -57,7 +58,7 @@ class CodeGenerator:
         self.subgraph_index = subgraph_index
         self.builder_name = builder_name
 
-    def ndarray_to_str(self, array: npt.NDArray, name: str) -> str:
+    def ndarray_to_str(self, array: obt.ArrayType, name: str) -> str:
         if array.size == 0:
             return "np.empty(shape={}, dtype={})".format(
                 array.shape, dtype_to_str(array.dtype)
@@ -179,7 +180,9 @@ class CodeGenerator:
             return ""
 
     def graph_to_code(
-        self, graph: onnx.GraphProto, inputs: dict[str, npt.NDArray] = {}
+        self,
+        graph: onnx.GraphProto,
+        inputs: dict[str, obt.ArrayType | list[obt.ArrayType]] = {},
     ) -> None:
         self.write("# inputs")
         initializers = [x.name for x in graph.initializer]
@@ -192,9 +195,9 @@ class CodeGenerator:
                             to_python_name(name),
                             self.builder_name,
                             self.value_info_to_prefix(input_),
-                            self.ndarray_to_str(inputs[name], name),
+                            self.ndarray_to_str(inputs[name], name),  # type: ignore
                             name,
-                        )
+                        )  # type: ignore
                     )
                 elif isinstance(inputs[name], list):
                     if isinstance(inputs[name][0], np.ndarray):
@@ -305,7 +308,7 @@ class CodeGenerator:
         self.storage_dir = self.output_dir / "storage"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.python_file = open(self.output_dir / "exporter.py", "w")
-        inputs: dict[str, npt.NDArray] = {}
+        inputs: dict[str, obt.ArrayType | list[obt.ArrayType]] = {}
         if isinstance(model_or_test_case, onnx.ModelProto):
             model = model_or_test_case
             self.with_test_case = False

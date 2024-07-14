@@ -6,7 +6,7 @@ from onnx_builder.util import dtype_to_str
 
 def test_tensor_from_proto() -> None:
     onnx_tensor = onnx.helper.make_tensor_type_proto(
-        onnx.TensorProto.DataType.FLOAT, [1, 2, 3]
+        onnx.TensorProto.FLOAT, [1, 2, 3]
     ).tensor_type
     tensor = onnx_builder.type.Tensor.from_proto(onnx_tensor)
     assert tensor.shape == (1, 2, 3)

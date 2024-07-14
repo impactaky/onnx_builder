@@ -8,10 +8,11 @@ from onnx_builder.value import Value, OptionalValue, ValueType, ValueContentType
 from .type import SequenceTensorType
 from typing import Callable, Any
 from google.protobuf.internal.containers import RepeatedScalarFieldContainer
+from onnx_builder import typing as obt
 
 
 ModelEvalFuncType = Callable[
-    [onnx.ModelProto, dict[str, ValueContentType], list[str]], list[npt.NDArray]
+    [onnx.ModelProto, dict[str, ValueContentType], list[str]], list[obt.ArrayType]
 ]
 
 
